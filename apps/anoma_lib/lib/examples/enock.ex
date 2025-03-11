@@ -1,7 +1,7 @@
 defmodule Examples.ENock do
-  alias Anoma.TransparentResource.Action
-  alias Anoma.TransparentResource.Delta
-  alias Anoma.TransparentResource.Transaction
+  alias Anoma.RM.Transparent.Action
+  alias Anoma.RM.Transparent.Transaction
+  alias Anoma.RM.Transparent.Primitive.DeltaHash
   alias Examples.ECrypto
   alias Examples.ETransparent.EAction
 
@@ -1972,7 +1972,7 @@ defmodule Examples.ENock do
   def kind_arm() do
     layer_depth = Nock.Lib.stdlib_layers() |> example_layer_depth()
 
-    "[8 [9 1492 0 #{layer_depth}] 9 2 10 [6 0 14] 0 2]"
+    "[8 [9 5972 0 #{layer_depth}] 9 2 10 [6 0 14] 0 2]"
     |> Noun.Format.parse_always()
   end
 
@@ -1986,19 +1986,19 @@ defmodule Examples.ENock do
 
     {:ok, kind} =
       resource
-      |> Anoma.TransparentResource.Resource.to_noun()
+      |> Noun.Nounable.to_noun()
       |> kind_call
       |> Nock.nock([9, 2, 0 | 1])
 
     assert resource
-           |> Anoma.TransparentResource.Resource.kind()
+           |> Anoma.RM.Transparent.Resource.kind()
            |> Noun.equal?(kind)
   end
 
   def delta_add_arm() do
     layer_depth = Nock.Lib.stdlib_layers() |> example_layer_depth()
 
-    "[8 [9 92 0 #{layer_depth}] 9 2 10 [6 7 [0 3] [0 12] 0 13] 0 2]"
+    "[8 [9 372 0 #{layer_depth}] 9 2 10 [6 7 [0 3] [0 12] 0 13] 0 2]"
     |> Noun.Format.parse_always()
   end
 
@@ -2008,20 +2008,19 @@ defmodule Examples.ENock do
   end
 
   def delta_add_test() do
-    delta = EAction.trivial_true_commit_delta() |> Delta.to_noun()
+    delta = EAction.trivial_true_commit_delta()
 
-    {:ok, map} =
+    {:ok, delta} =
       delta_add_call(delta, delta) |> Nock.nock([9, 2, 0 | 1])
 
-    {:ok, delta} = map |> Delta.from_noun()
     delta_original = EAction.trivial_true_commit_delta()
-    assert delta == Delta.add(delta_original, delta_original)
+    assert delta == DeltaHash.delta_add(delta_original, delta_original)
   end
 
   def delta_sub_arm() do
     layer_depth = Nock.Lib.stdlib_layers() |> example_layer_depth()
 
-    "[8 [9 1527 0 #{layer_depth}] 9 2 10 [6 7 [0 3] [0 12] 0 13] 0 2]"
+    "[8 [9 12013 0 #{layer_depth}] 9 2 10 [6 7 [0 3] [0 12] 0 13] 0 2]"
     |> Noun.Format.parse_always()
   end
 
@@ -2031,12 +2030,12 @@ defmodule Examples.ENock do
   end
 
   def delta_sub_test() do
-    delta = EAction.trivial_true_commit_delta() |> Delta.to_noun()
+    delta = EAction.trivial_true_commit_delta()
 
     assert delta_sub_call(delta, delta)
            |> Nock.nock([9, 2, 0 | 1])
            |> elem(1)
-           |> Noun.equal?([])
+           |> Noun.equal?(2)
   end
 
   def action_delta_arm() do
@@ -2054,10 +2053,9 @@ defmodule Examples.ENock do
   def action_delta_test() do
     action = EAction.trivial_true_commit_action() |> Noun.Nounable.to_noun()
 
-    {:ok, map} =
+    {:ok, delta} =
       action |> action_delta_call() |> Nock.nock([9, 2, 0 | 1])
 
-    {:ok, delta} = map |> Delta.from_noun()
     delta_original = EAction.trivial_true_commit_action() |> Action.delta()
 
     assert delta == delta_original
@@ -2066,7 +2064,7 @@ defmodule Examples.ENock do
   def make_delta_arm() do
     layer_depth = Nock.Lib.stdlib_layers() |> example_layer_depth()
 
-    "[8 [9 1494 0 #{layer_depth}] 9 2 10 [6 0 14] 0 2]"
+    "[8 [9 11951 0 #{layer_depth}] 9 2 10 [6 0 14] 0 2]"
     |> Noun.Format.parse_always()
   end
 
@@ -2080,17 +2078,16 @@ defmodule Examples.ENock do
       MapSet.new([EAction.trivial_true_commit_action()])
       |> Noun.Nounable.to_noun()
 
-    {:ok, map} =
+    {:ok, delta} =
       actions |> make_delta_call() |> Nock.nock([9, 2, 0 | 1])
 
-    {:ok, delta} = map |> Delta.from_noun()
     assert delta == EAction.trivial_true_commit_action() |> Action.delta()
   end
 
   def is_commitment_arm() do
     layer_depth = Nock.Lib.stdlib_layers() |> example_layer_depth()
 
-    "[8 [9 6.102 0 #{layer_depth}] 9 2 10 [6 0 14] 0 2]"
+    "[8 [9 12012 0 #{layer_depth}] 9 2 10 [6 0 14] 0 2]"
     |> Noun.Format.parse_always()
   end
 
@@ -2123,7 +2120,7 @@ defmodule Examples.ENock do
   def is_nullifier_arm() do
     layer_depth = Nock.Lib.stdlib_layers() |> example_layer_depth()
 
-    "[8 [9 372 0 #{layer_depth}] 9 2 10 [6 0 14] 0 2]"
+    "[8 [9 5974 0 #{layer_depth}] 9 2 10 [6 0 14] 0 2]"
     |> Noun.Format.parse_always()
   end
 
