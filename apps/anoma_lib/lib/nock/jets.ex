@@ -826,6 +826,17 @@ defmodule Nock.Jets do
     end
   end
 
+  @spec resource_delta(Noun.t()) :: :error | {:ok, Noun.t()}
+  def resource_delta(core) do
+    with {:ok, a} <- sample(core),
+         {:ok, action} <- Resource.from_noun(a) do
+      res = action |> Resource.delta()
+      {:ok, res}
+    else
+      _ -> :error
+    end
+  end
+
   @spec compliance_delta(Noun.t()) :: :error | {:ok, Noun.t()}
   def compliance_delta(core) do
     with {:ok, a} <- sample(core),
@@ -986,6 +997,16 @@ defmodule Nock.Jets do
              jason3_res
            ) do
       {:ok, Noun.Nounable.to_noun(tx)}
+    else
+      _ -> :error
+    end
+  end
+
+  @spec cairo_prove_delta(Noun.t()) :: :error | {:ok, Noun.t()}
+  def cairo_prove_delta(core) do
+    with {:ok, sample} <- sample(core),
+         {:ok, cairo_tx} <- CairoResource.Transaction.from_noun(sample) do
+      {:ok, CairoResource.Transaction.prove_delta(cairo_tx)}
     else
       _ -> :error
     end
