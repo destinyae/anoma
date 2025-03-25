@@ -10,6 +10,8 @@ defmodule Anoma.Node.Utility.Indexer do
   use GenServer
   use TypedStruct
 
+  import Noun
+
   typedstruct do
     field(:node_id, String.t())
     field(:filters, %{atom() => (any(), any() -> MapSet.t())})
@@ -188,8 +190,8 @@ defmodule Anoma.Node.Utility.Indexer do
         end
       end)
 
-    if is_binary(res) do
-      res
+    if is_noun_atom(res) do
+      Noun.atom_integer_to_binary(res)
     else
       Enum.into(res, MapSet.new([]), &Noun.atom_integer_to_binary/1)
     end
