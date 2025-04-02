@@ -214,6 +214,64 @@ defmodule Anoma.Node.Examples.EShard do
   end
 
   @doc """
+  I test a scenario with two pending reads at different heights.
+  An intermediate watermark advance unblocks only the lower-height read,
+  while the higher-height read eventually times out.
+  """
+  @spec test_partial_read_unblocking_with_timeout() :: ENode.t()
+  def test_partial_read_unblocking_with_timeout() do
+    enode = ENode.start_node()
+    shard_id = :test_shard_partial_unblock
+    shard_via = Registry.via(Anoma.Node, {Shard, shard_id})
+    key = "a"
+    initial_value = 1
+
+    read_height_ok = 5
+    read_height_timeout = 15
+    watermark_height = 10
+
+    # Start the shard with an initial value
+    {:ok, shard_pid} = Shard.start_link(id: shard_id, initial_kv: %{key => initial_value})
+
+    # 1. Acquire Locks
+    {:ok, %{read: read_ref_ok}} = Shard.lock(shard_via, key, read_height_ok, :read)
+    {:ok, %{read: read_ref_timeout}} = Shard.lock(shard_via, key, read_height_timeout, :read)
+
+    # 2. Start Read Tasks (both will block initially)
+    read_task_ok = Task.async(fn ->
+      Shard.read(shard_via, key, read_height_ok, read_ref_ok)
+    end)
+    read_task_timeout = Task.async(fn ->
+      Shard.read(shard_via, key, read_height_timeout, read_ref_timeout)
+    end)
+
+    # Give tasks time to start and block
+    Process.sleep(50)
+
+    # 3. Advance Watermark partially (enough for height 5, not for 15)
+    send(shard_pid, {:write_watermark_advanced, key, watermark_height})
+
+    # 4. Await the read that should succeed
+    result_ok = Task.await(read_task_ok, 1000) # Generous timeout
+    # Read at height 5 resolves based on latest write < 5, which is height -1
+    assert result_ok == {:ok, initial_value}
+
+    # 5. Await the read that should time out
+    try do
+      Task.await(read_task_timeout, 100) # Short timeout
+      flunk("Task for height #{read_height_timeout} should have timed out, but it returned.")
+    catch
+      :exit, reason ->
+        assert reason == :timeout or match?({:timeout, _}, reason)
+    end
+
+    # Ensure the timed-out task is shut down
+    if Process.alive?(read_task_timeout.pid), do: Task.shutdown(read_task_timeout, :brutal_kill)
+
+    enode
+  end
+
+  @doc """
   I test a more complex scenario involving multiple writes, reads, and
   write watermark advancements.
   """
@@ -387,6 +445,84 @@ defmodule Anoma.Node.Examples.EShard do
     # Ensure others are gone
     refute Map.has_key?(kv5, 15)
     refute Map.has_key?(kv5, 17)
+
+    enode
+  end
+
+  @doc """
+  I test various scenarios of lock acquisition failures due to watermarks,
+  existing values, and successful re-acquisition of existing locks.
+  """
+  @spec test_lock_failures_and_reacquisition() :: ENode.t()
+  def test_lock_failures_and_reacquisition() do
+    enode = ENode.start_node()
+    shard_id = :test_shard_lock_failures
+    shard_via = Registry.via(Anoma.Node, {Shard, shard_id})
+    key = "a"
+
+    # Start the shard (empty initial state)
+    {:ok, shard_pid} = Shard.start_link(id: shard_id, initial_kv: %{})
+
+    # --- Setup Watermarks ---
+    send(shard_pid, {:read_watermark_advanced, key, 10})
+    send(shard_pid, {:write_watermark_advanced, key, 10})
+    Process.sleep(50) # Allow messages to process
+
+    # --- Test Locking Below Watermarks (Height 5) ---
+    assert Shard.lock(shard_via, key, 5, :read) == {:error, :locking_read_past_read_watermark}
+    assert Shard.lock(shard_via, key, 5, :write) == {:error, :locking_write_past_write_watermark}
+    # Write check happens first for :read_write
+    assert Shard.lock(shard_via, key, 5, :read_write) == {:error, :locking_write_past_write_watermark}
+
+    # --- Test Lock Re-acquisition (Height 15) ---
+    # Sequence: read -> read -> write -> write -> read
+
+    # 1st Read
+    {:ok, %{read: read_ref_15_a, write: nil}} = Shard.lock(shard_via, key, 15, :read)
+    assert is_reference(read_ref_15_a)
+
+    # 2nd Read (should return same ref)
+    {:ok, %{read: read_ref_15_b, write: nil}} = Shard.lock(shard_via, key, 15, :read)
+    assert read_ref_15_a == read_ref_15_b
+
+    # 1st Write (acquire alongside read)
+    {:ok, %{read: read_ref_15_c, write: write_ref_15_a}} = Shard.lock(shard_via, key, 15, :write)
+    assert read_ref_15_a == read_ref_15_c # Read ref should persist
+    assert is_reference(write_ref_15_a)
+
+    # 2nd Write (should return same refs)
+    {:ok, %{read: read_ref_15_d, write: write_ref_15_b}} = Shard.lock(shard_via, key, 15, :write)
+    assert read_ref_15_a == read_ref_15_d
+    assert write_ref_15_a == write_ref_15_b
+
+    # 3rd Read (should return same refs)
+    {:ok, %{read: read_ref_15_e, write: write_ref_15_c}} = Shard.lock(shard_via, key, 15, :read)
+    assert read_ref_15_a == read_ref_15_e
+    assert write_ref_15_a == write_ref_15_c
+
+    # --- Test Write Blocking Lock Acquisition (Height 20) ---
+    # First, write a value to height 20
+    {:ok, %{write: write_ref_20_setup}} = Shard.lock(shard_via, key, 20, :write)
+    assert :ok == Shard.write(shard_via, key, "value_at_20", 20, write_ref_20_setup)
+
+    # Sequence: write -> write -> read -> read -> write
+
+    # 1st Write (should fail due to existing value)
+    assert Shard.lock(shard_via, key, 20, :write) == {:error, :slot_occupied_by_value}
+
+    # 2nd Write (should fail)
+    assert Shard.lock(shard_via, key, 20, :write) == {:error, :slot_occupied_by_value}
+
+    # 1st Read (should succeed even with value)
+    {:ok, %{read: read_ref_20_a, write: nil}} = Shard.lock(shard_via, key, 20, :read)
+    assert is_reference(read_ref_20_a)
+
+    # 2nd Read (should succeed, return same ref)
+    {:ok, %{read: read_ref_20_b, write: nil}} = Shard.lock(shard_via, key, 20, :read)
+    assert read_ref_20_a == read_ref_20_b
+
+    # 3rd Write (should fail)
+    assert Shard.lock(shard_via, key, 20, :write) == {:error, :slot_occupied_by_value}
 
     enode
   end
