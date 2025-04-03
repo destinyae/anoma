@@ -22,7 +22,7 @@ defmodule Anoma.Node.Transaction.Shard do
   - **KV State:** A map storing key -> height -> entry_details.
   - **Locks:** Independent read and write locks associated with a `{key, height}` and unique references (`read_lock_ref`, `write_lock_ref`).
   - **Watermarks:** Per-key dual watermarks (`:read`, `:write`) control read resolution and GC.
-  - **Non-Blocking Reads:** Read requests are acknowledged immediately, results sent later. Read completion releases the specific read lock.
+  - **Synchronous Reads:** Read requests (`read/4`) block the caller until resolved. Resolution may be delayed internally if blocked by watermarks or preceding write locks. Read completion releases the specific read lock.
 
   """
 
@@ -511,7 +511,7 @@ defmodule Anoma.Node.Transaction.Shard do
           |> MapSet.union(supporting_heights)
           |> MapSet.union(read_lock_heights_set) # Add heights holding the locks
 
-        # 4. Filter the map: Keep esntries > watermark OR in the essential set
+        # 4. Filter the map: Keep entries > watermark OR in the essential set
         new_key_height_map =
           Enum.filter(key_height_map, fn {h, _details} ->
             h > read_watermark or MapSet.member?(all_heights_to_keep, h)
