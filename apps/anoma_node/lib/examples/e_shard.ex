@@ -526,4 +526,51 @@ defmodule Anoma.Node.Examples.EShard do
 
     enode
   end
+
+  @doc """
+  I test that a read can resolve successfully even if an older write lock
+  (at a height lower than the height of the value the read depends on)
+  is still held. This verifies a fix for overly broad write lock blocking.
+  """
+  @spec test_read_past_old_write_lock() :: ENode.t()
+  def test_read_past_old_write_lock() do
+    enode = ENode.start_node()
+    shard_id = :test_shard_read_past_lock
+    shard_via = Registry.via(Anoma.Node, {Shard, shard_id})
+    key = "a"
+
+    h_lock = 5
+    h_write = 7
+    write_value = 10
+    h_read = 9
+
+    # Start the shard with initial value
+    {:ok, shard_pid} = Shard.start_link(id: shard_id, initial_kv: %{})
+
+    # 1. Acquire write lock at h_lock (and HOLD it)
+    {:ok, %{write: write_ref_lock}} = Shard.lock(shard_via, key, h_lock, :write)
+
+    # 2. Write successfully at h_write
+    {:ok, %{write: write_ref_write}} = Shard.lock(shard_via, key, h_write, :write)
+    assert :ok == Shard.write(shard_via, key, write_value, h_write, write_ref_write)
+
+    # 3. Acquire read lock at h_read
+    {:ok, %{read: read_ref_read}} = Shard.lock(shard_via, key, h_read, :read)
+
+    # 4. Advance write watermark to allow the read at h_read
+    send(shard_pid, {:write_watermark_advanced, key, h_read + 1}) # WM >= 9
+
+    # 5. Perform the read at h_read
+    result = Shard.read(shard_via, key, h_read, read_ref_read)
+
+    # 6. Assert: Read at 9 should resolve to value written at 7,
+    #    despite the older write lock still held at 5.
+    assert result == {:ok, write_value}
+
+    # 7. Verify the lock at h_lock is still held (for sanity)
+    state = :sys.get_state(shard_pid)
+    assert state.kv[key][h_lock].write_lock_ref == write_ref_lock
+
+    enode
+  end
 end

@@ -539,32 +539,49 @@ defmodule Anoma.Node.Transaction.Shard do
   # - `{:ok, :absent}` if resolvable and no value exists below `height_req`.
   # - `{:ok, {:ok, value}}` if resolvable and a value exists.
   # - `:blocked_by_watermark` if `height_req` is above the write watermark.
-  # - `:blocked_by_write_lock` if there's an active write lock below `height_req`.
+  # - `:blocked_by_write_lock` if the latest entry below `height_req` holds a write lock.
   @spec resolve_read_value(height(), map(), map()) ::
           {:ok, :absent | {:ok, value()}} | :blocked_by_watermark | :blocked_by_write_lock
   defp resolve_read_value(height_req, key_height_map, key_watermarks) do
     cond do
-      # 1. Check Watermark
+      # 1. Check Watermark (Unchanged)
       height_req > key_watermarks.write ->
         :blocked_by_watermark
 
-      # 2. Check for Blocking Write Locks below height_req
-      Enum.any?(key_height_map, fn {h, details} -> h < height_req and not is_nil(details.write_lock_ref) end) ->
-        :blocked_by_write_lock
-
-      # 3. Watermark sufficient and no blocking write locks, find the value
       true ->
-        {_latest_height, details_at_read_height} =
+        # 2. Find the latest entry below height_req that has EITHER a value OR a write lock.
+        # This represents the most recent operation determining the state relevant to the read.
+        maybe_relevant_entry =
           key_height_map
-          |> Enum.filter(fn {h, details} -> h < height_req and not is_nil(details.value) end)
-          |> Enum.max_by(fn {h, _details} -> h end, fn -> {-1, %{value: nil}} end) # Find latest *written* value
+          |> Enum.filter(fn {h, details} ->
+               h < height_req and (not is_nil(details.value) or not is_nil(details.write_lock_ref))
+             end)
+          |> Enum.max_by(fn {h, _details} -> h end, fn -> nil end)
 
-        result =
-          case details_at_read_height.value do
-            nil -> :absent
-            val -> {:ok, val}
-          end
-        {:ok, result} # Wrap in :ok tuple to distinguish from block reasons
+        case maybe_relevant_entry do
+          # 3. No relevant entry found below height_req (implies initial state or empty)
+          nil ->
+            # If no entry with a value or lock exists below height_req, the result is absent.
+            {:ok, :absent}
+
+          # 4. Relevant entry found, check its state
+          {_h, details} ->
+            cond do
+              # If the latest relevant entry has a value (is committed), resolve the read.
+              not is_nil(details.value) ->
+                {:ok, {:ok, details.value}}
+
+              # If the latest relevant entry holds a write lock, block the read.
+              not is_nil(details.write_lock_ref) ->
+                 :blocked_by_write_lock
+
+              # Should be unreachable.
+              true ->
+                 Logger.error("Shard: Unreachable state in resolve_read_value for key height map: #{inspect(key_height_map)}, height_req: #{height_req}")
+                 # Treat as absent if we somehow reach here
+                 {:ok, :absent}
+            end
+        end
     end
   end
 
