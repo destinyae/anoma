@@ -158,6 +158,15 @@ defmodule Nock.Jets.Mugs do
        &Nock.Jets.cairo_create_from_cus/1, :enabled, 10},
     (Jets.calculate_core(1503, Nock.Lib.stdlib_layers()) |> hd()) =>
       {"cairo-prove-delta", 7, @layer_rm, &Nock.Jets.cairo_prove_delta/1,
+       :enabled, 10},
+    (Jets.calculate_core(190, Nock.Lib.stdlib_layers()) |> hd()) =>
+      {"secp256k1-sign", 7, @layer_rm, &Nock.Jets.secp256k1_sign/1, :enabled,
+       10},
+    (Jets.calculate_core(175, Nock.Lib.stdlib_layers()) |> hd()) =>
+      {"secp256k1-verify", 7, @layer_rm, &Nock.Jets.secp256k1_verify/1,
+       :enabled, 10},
+    (Jets.calculate_core(372, Nock.Lib.stdlib_layers()) |> hd()) =>
+      {"secp256k1-pub-key", 7, @layer_rm, &Nock.Jets.secp256k1_public_key/1,
        :enabled, 10}
   }
 
