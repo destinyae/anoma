@@ -2304,6 +2304,76 @@ defmodule Examples.ENock do
     assert ETransaction.swap_from_actions() == tx
   end
 
+  def secp_sign_arm() do
+    layer_depth = Nock.Lib.stdlib_layers() |> example_layer_depth()
+
+    "[8 [9 190 0 #{layer_depth}] 9 2 10 [6 7 [0 3] [0 12] 0 13] 0 2]"
+    |> Noun.Format.parse_always()
+  end
+
+  def secp_sign_call(msg, key) do
+    sample = [msg | key]
+
+    [secp_sign_arm(), sample | Nock.Lib.logics_core()]
+    |> Nock.nock([9, 2, 0 | 1])
+  end
+
+  def secp_sign_test(
+        msg \\ :crypto.strong_rand_bytes(32),
+        key \\ :crypto.strong_rand_bytes(32)
+      ) do
+    {:ok, res} = secp_sign_call(msg, key)
+    {:ok, res2} = ExSecp256k1.sign_compact(msg, key)
+
+    assert Noun.equal?(Noun.Nounable.to_noun(res2), res)
+  end
+
+  def secp_public_key_arm() do
+    layer_depth = Nock.Lib.stdlib_layers() |> example_layer_depth()
+
+    "[8 [9 372 0 #{layer_depth}] 9 2 10 [6 0 14] 0 2]"
+    |> Noun.Format.parse_always()
+  end
+
+  def secp_public_key_call(priv_key) do
+    sample = priv_key
+
+    [secp_public_key_arm(), sample | Nock.Lib.logics_core()]
+    |> Nock.nock([9, 2, 0 | 1])
+  end
+
+  def secp_public_key_test(key \\ :crypto.strong_rand_bytes(32)) do
+    {:ok, res} = secp_public_key_call(key)
+    {:ok, res2} = ExSecp256k1.create_public_key(key)
+
+    assert res2 == res
+  end
+
+  def secp_verify_arm() do
+    layer_depth = Nock.Lib.stdlib_layers() |> example_layer_depth()
+
+    "[8 [9 175 0 #{layer_depth}] 9 2 10 [6 7 [0 3] [0 12] [0 26] 0 27] 0 2]"
+    |> Noun.Format.parse_always()
+  end
+
+  def secp_verify_call(msg, sig, key) do
+    sample = [msg, sig | key]
+
+    [secp_verify_arm(), sample | Nock.Lib.logics_core()]
+    |> Nock.nock([9, 2, 0 | 1])
+  end
+
+  def secp_verify_test(
+        msg \\ :crypto.strong_rand_bytes(32),
+        key \\ :crypto.strong_rand_bytes(32)
+      ) do
+    {:ok, [sign | _r]} = secp_sign_call(msg, key)
+    {:ok, pub_key} = secp_public_key_call(key)
+    {:ok, bool} = secp_verify_call(msg, sign, pub_key)
+
+    assert Noun.equal?(bool, 0)
+  end
+
   ############################################################
   ##                      Block Cores                       ##
   ############################################################
