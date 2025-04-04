@@ -10,7 +10,6 @@ defmodule Anoma.Node.Examples.EShardSupervisor do
   # ShardSupervisor isn't called directly, but good to alias if referencing types
   # alias Anoma.Node.Transaction.ShardSupervisor
 
-  require Logger
   import ExUnit.Assertions
 
   # Use the same registry name constant defined in supervisors
@@ -23,7 +22,6 @@ defmodule Anoma.Node.Examples.EShardSupervisor do
   """
   @spec test_shard_supervisor_startup_and_routing() :: :ok
   def test_shard_supervisor_startup_and_routing() do
-    Logger.info("--- Starting test_shard_supervisor_startup_and_routing --- ")
     node_id = "shard_sup_test_node"
 
     # 1. Define Schema and Start Node
@@ -33,7 +31,6 @@ defmodule Anoma.Node.Examples.EShardSupervisor do
 
     enode = ENode.start_node(opts)
     assert %ENode{node_id: ^node_id} = enode
-    Logger.info("Node #{node_id} started.")
 
     # Allow supervisors a moment to start children
     Process.sleep(100)
@@ -42,7 +39,6 @@ defmodule Anoma.Node.Examples.EShardSupervisor do
     via_router = Registry.via(node_id, ShardRouter)
     pid_router = Registry.whereis(node_id, ShardRouter)
     assert is_pid(pid_router), "ShardRouter for node #{node_id} should be registered and alive."
-    Logger.info("ShardRouter verified.")
 
     # 3. Verify Shard Processes Exist using (key, Module) lookup
     via_shard_a = Registry.via(node_id, Shard, "a")
@@ -56,7 +52,6 @@ defmodule Anoma.Node.Examples.EShardSupervisor do
     assert is_pid(pid_shard_a), "Shard 'a' should be registered and alive."
     assert is_pid(pid_shard_b), "Shard 'b' should be registered and alive."
     assert is_pid(pid_shard_c), "Shard 'c' should be registered and alive."
-    Logger.info("Shard processes verified.")
 
     # 4. Verify Initial State within Shards (using :sys.get_state for test)
     state_a = :sys.get_state(pid_shard_a)
@@ -67,19 +62,15 @@ defmodule Anoma.Node.Examples.EShardSupervisor do
     assert state_a.kv["a"][-1].value == 5, "Shard 'a' initial value mismatch"
     assert state_b.kv == %{}, "Shard 'b' should have an empty initial kv map"
     assert state_c.kv["c"][-1].value == 7, "Shard 'c' initial value mismatch"
-    Logger.info("Shard initial states verified.")
 
     # 5. Query ShardRouter using the specific router's via tuple
     assert GenServer.call(via_router, {:get_shard_name, "a"}) == {:ok, via_shard_a}, "Router lookup for 'a' failed"
     assert GenServer.call(via_router, {:get_shard_name, "b"}) == {:ok, via_shard_b}, "Router lookup for 'b' failed"
     assert GenServer.call(via_router, {:get_shard_name, "c"}) == {:ok, via_shard_c}, "Router lookup for 'c' failed"
     assert GenServer.call(via_router, {:get_shard_name, "d"}) == :error, "Router lookup for unknown key 'd' should return :error"
-    Logger.info("ShardRouter lookups verified.")
 
     # 6. Cleanup
     :ok = ENode.stop_node(enode)
-    Logger.info("Node #{node_id} stopped.")
-    Logger.info("--- Finished test_shard_supervisor_startup_and_routing --- ")
     :ok
   end
 end

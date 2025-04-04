@@ -27,8 +27,6 @@ defmodule Anoma.Node.Transaction.ShardSupervisor do
   alias Anoma.Node.Transaction.Shard
   alias Anoma.Node.Transaction.ShardRouter
 
-  require Logger
-
   ############################################################
   #                       Types                              #
   ############################################################
@@ -105,13 +103,11 @@ defmodule Anoma.Node.Transaction.ShardSupervisor do
   def init(args) do
     node_id = Keyword.fetch!(args, :node_id)
     Process.set_label({__MODULE__, node_id})
-    Logger.info("Initializing ShardSupervisor #{node_id} with args: #{inspect(args)}")
 
     # Process schema only if strategy and schema are validly provided
     {shard_child_specs, key_to_name_map} =
       case {Keyword.get(args, :strategy), Keyword.get(args, :schema)} do
         {:one_per_key, schema} when is_list(schema) ->
-          Logger.info("Building shard specs and map for ShardSupervisor #{node_id}...")
 
           # Iterate schema once to build specs and key->name map
           Enum.reduce(schema, {[], %{}}, fn schema_entry, {specs_acc, map_acc} ->
@@ -132,51 +128,40 @@ defmodule Anoma.Node.Transaction.ShardSupervisor do
                 child_spec = %{id: shard_id, start: {Shard, :start_link, [shard_args]}}
                 {[child_spec | specs_acc], Map.put(map_acc, key, shard_name)}
 
-              invalid_entry ->
-                 Logger.error("Invalid schema entry for :one_per_key strategy (Node: #{node_id}): #{inspect(invalid_entry)}. Skipping.")
+              _invalid_entry ->
                  {specs_acc, map_acc} # Skip invalid entry
             end
           end)
           |> then(fn {specs, map} -> {Enum.reverse(specs), map} end) # Reverse specs for order
 
         {nil, _} ->
-          Logger.info("No :strategy provided for ShardSupervisor #{node_id}, starting no shards.")
           {[], %{}}
 
         {_strategy, nil} ->
-           Logger.info("No :schema provided for ShardSupervisor #{node_id}, starting no shards.")
            {[], %{}}
 
-         {invalid_strategy, _} ->
-           Logger.error("Unsupported shard strategy (Node: #{node_id}): #{inspect(invalid_strategy)}")
+         {_invalid_strategy, _} ->
            {[], %{}}
       end
 
     # Create and populate ETS table if shards were generated
     if map_size(key_to_name_map) > 0 do
-      Logger.debug("Populating ETS table :shard_key_map for node #{node_id}")
       ets_table = :ets.new(@ets_table_name, [:set, :public, :named_table, read_concurrency: true])
 
       # Verify table creation/access and log insertions
       if :ets.info(ets_table, :name) == @ets_table_name do
-        Logger.debug("ETS table :shard_key_map verified/created for node #{node_id}. Owner: #{inspect(:ets.info(ets_table, :owner))}")
         for {key, name} <- key_to_name_map do
-          Logger.debug("ShardSupervisor #{node_id}: Inserting into ETS: Key=#{inspect(key)}, Name=#{inspect(name)}")
           :ets.insert(ets_table, {key, name})
         end
-      else
-        Logger.error("ShardSupervisor #{node_id}: Failed to create or verify ETS table :shard_key_map")
       end
 
       # Define router child spec (only needed if shards exist)
       router_child_spec = {ShardRouter, [node_id: node_id]}
       all_children = [router_child_spec | shard_child_specs]
 
-      Logger.debug("ShardSupervisor #{node_id} starting children: #{inspect(all_children)}")
       Supervisor.init(all_children, strategy: :one_for_one)
     else
       # No shards configured or generated, start no children
-      Logger.debug("ShardSupervisor #{node_id} starting no children.")
       Supervisor.init([], strategy: :one_for_one)
     end
   end
