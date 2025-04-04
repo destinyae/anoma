@@ -73,10 +73,11 @@ defmodule Anoma.Node.Examples.ENode do
     initialize_ets()
 
     opts =
-      Keyword.validate!(opts,
+      Keyword.validate!(opts, [
         node_id: "#{:erlang.phash2(make_ref())}",
-        grpc_port: 0
-      )
+        grpc_port: 0,
+        transaction: []
+      ])
 
     enode =
       case Anoma.Supervisor.start_node(opts) do

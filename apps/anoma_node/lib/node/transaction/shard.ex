@@ -91,10 +91,8 @@ defmodule Anoma.Node.Transaction.Shard do
   """
   @spec start_link(map()) :: GenServer.on_start()
   def start_link(opts) do
-    # id: shard_id, initial_kv: %{key => val}
-    id = Keyword.fetch!(opts, :id)
-    name = Registry.via(Anoma.Node, {__MODULE__, id}) # TODO: Is this right?
-    GenServer.start_link(__MODULE__, opts, name: name)
+    # id: shard_id, node_id: node_id, initial_kv: %{key => val}
+    GenServer.start_link(__MODULE__, opts)
   end
 
   @doc """
@@ -151,7 +149,16 @@ defmodule Anoma.Node.Transaction.Shard do
   def init(opts) do
     Process.set_label(__MODULE__)
     id = Keyword.fetch!(opts, :id)
+    node_id = Keyword.fetch!(opts, :node_id)
     initial_kv_arg = Keyword.get(opts, :initial_kv, %{})
+
+    # Register the shard process
+    case Registry.register(node_id, __MODULE__, id) do
+      {:ok, _pid} ->
+        Logger.debug("Shard #{id} successfully registered for node #{node_id}")
+      {:error, reason} ->
+        Logger.error("Shard #{id} failed to register for node #{node_id}: #{inspect(reason)}")
+    end
 
     # Initialize KV with schema values at height -1 using the new structure
     kv =

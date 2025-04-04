@@ -16,8 +16,9 @@ defmodule Anoma.Node.Examples.EShard do
   @spec start_and_test_initial_state() :: ENode.t()
   def start_and_test_initial_state() do
     enode = ENode.start_node()
+    node_id = enode.node_id
     shard_id = :test_shard_1
-    shard_via = Registry.via(Anoma.Node, {Shard, shard_id})
+    shard_via = Registry.via(node_id, Shard, shard_id)
 
     initial_kv = %{
       "a" => 5,
@@ -26,7 +27,7 @@ defmodule Anoma.Node.Examples.EShard do
     }
 
     # Start the shard
-    {:ok, shard_pid} = Shard.start_link(id: shard_id, initial_kv: initial_kv)
+    {:ok, shard_pid} = Shard.start_link(node_id: node_id, id: shard_id, initial_kv: initial_kv)
 
     # --- Simulate Watermark Advancement prior to acquiring locks ---
     send(shard_pid, {:write_watermark_advanced, "c", 5})
@@ -63,15 +64,16 @@ defmodule Anoma.Node.Examples.EShard do
   @spec test_queued_read() :: ENode.t()
   def test_queued_read() do
     enode = ENode.start_node()
+    node_id = enode.node_id
     shard_id = :test_shard_queued
-    shard_via = Registry.via(Anoma.Node, {Shard, shard_id})
+    shard_via = Registry.via(node_id, Shard, shard_id)
 
     initial_kv = %{
       "a" => 5
     }
 
     # Start the shard
-    {:ok, shard_pid} = Shard.start_link(id: shard_id, initial_kv: initial_kv)
+    {:ok, shard_pid} = Shard.start_link(node_id: node_id, id: shard_id, initial_kv: initial_kv)
 
     key = "a"
     height = 7
@@ -114,8 +116,9 @@ defmodule Anoma.Node.Examples.EShard do
   @spec test_queued_read_with_intermediate_write() :: ENode.t()
   def test_queued_read_with_intermediate_write() do
     enode = ENode.start_node()
+    node_id = enode.node_id
     shard_id = :test_shard_queued_write
-    shard_via = Registry.via(Anoma.Node, {Shard, shard_id})
+    shard_via = Registry.via(node_id, Shard, shard_id)
 
     key = "a"
     initial_value = 5
@@ -128,7 +131,7 @@ defmodule Anoma.Node.Examples.EShard do
     }
 
     # Start the shard
-    {:ok, shard_pid} = Shard.start_link(id: shard_id, initial_kv: initial_kv)
+    {:ok, shard_pid} = Shard.start_link(node_id: node_id, id: shard_id, initial_kv: initial_kv)
 
     # 1. Acquire Read Lock for the future read
     {:ok, %{read: read_ref}} = Shard.lock(shard_via, key, read_height, :read)
@@ -172,11 +175,12 @@ defmodule Anoma.Node.Examples.EShard do
   @spec test_read_timeout() :: ENode.t()
   def test_read_timeout() do
     enode = ENode.start_node()
+    node_id = enode.node_id
     shard_id = :test_shard_timeout
-    shard_via = Registry.via(Anoma.Node, {Shard, shard_id})
+    shard_via = Registry.via(node_id, Shard, shard_id)
 
     # Start the shard (initial state doesn't matter)
-    {:ok, _shard_pid} = Shard.start_link(id: shard_id, initial_kv: %{})
+    {:ok, _shard_pid} = Shard.start_link(node_id: node_id, id: shard_id, initial_kv: %{})
 
     key = "a"
     height = 5
@@ -221,8 +225,9 @@ defmodule Anoma.Node.Examples.EShard do
   @spec test_partial_read_unblocking_with_timeout() :: ENode.t()
   def test_partial_read_unblocking_with_timeout() do
     enode = ENode.start_node()
+    node_id = enode.node_id
     shard_id = :test_shard_partial_unblock
-    shard_via = Registry.via(Anoma.Node, {Shard, shard_id})
+    shard_via = Registry.via(node_id, Shard, shard_id)
     key = "a"
     initial_value = 1
 
@@ -231,7 +236,7 @@ defmodule Anoma.Node.Examples.EShard do
     watermark_height = 10
 
     # Start the shard with an initial value
-    {:ok, shard_pid} = Shard.start_link(id: shard_id, initial_kv: %{key => initial_value})
+    {:ok, shard_pid} = Shard.start_link(node_id: node_id, id: shard_id, initial_kv: %{key => initial_value})
 
     # 1. Acquire Locks
     {:ok, %{read: read_ref_ok}} = Shard.lock(shard_via, key, read_height_ok, :read)
@@ -278,8 +283,9 @@ defmodule Anoma.Node.Examples.EShard do
   @spec test_complex_write_and_read_scenario() :: ENode.t()
   def test_complex_write_and_read_scenario() do
     enode = ENode.start_node()
+    node_id = enode.node_id
     shard_id = :test_shard_complex_writes
-    shard_via = Registry.via(Anoma.Node, {Shard, shard_id})
+    shard_via = Registry.via(node_id, Shard, shard_id)
     key = "a"
 
     initial_kv = %{
@@ -287,7 +293,7 @@ defmodule Anoma.Node.Examples.EShard do
     }
 
     # Start the shard
-    {:ok, shard_pid} = Shard.start_link(id: shard_id, initial_kv: initial_kv)
+    {:ok, shard_pid} = Shard.start_link(node_id: node_id, id: shard_id, initial_kv: initial_kv)
 
     # --- Acquire Write Locks ---
     {:ok, %{write: write_ref_5}} = Shard.lock(shard_via, key, 5, :write)
@@ -344,14 +350,15 @@ defmodule Anoma.Node.Examples.EShard do
   @spec test_gc_and_lock_release_state() :: ENode.t()
   def test_gc_and_lock_release_state() do
     enode = ENode.start_node()
+    node_id = enode.node_id
     shard_id = :test_shard_gc_lock_release
-    shard_via = Registry.via(Anoma.Node, {Shard, shard_id})
+    shard_via = Registry.via(node_id, Shard, shard_id)
     key = "a"
 
     initial_kv = %{key => 3}
 
     # Start the shard
-    {:ok, shard_pid} = Shard.start_link(id: shard_id, initial_kv: initial_kv)
+    {:ok, shard_pid} = Shard.start_link(node_id: node_id, id: shard_id, initial_kv: initial_kv)
 
     # --- Writes ---
     write_ops = %{
@@ -456,12 +463,13 @@ defmodule Anoma.Node.Examples.EShard do
   @spec test_lock_failures_and_reacquisition() :: ENode.t()
   def test_lock_failures_and_reacquisition() do
     enode = ENode.start_node()
+    node_id = enode.node_id
     shard_id = :test_shard_lock_failures
-    shard_via = Registry.via(Anoma.Node, {Shard, shard_id})
+    shard_via = Registry.via(node_id, Shard, shard_id)
     key = "a"
 
     # Start the shard (empty initial state)
-    {:ok, shard_pid} = Shard.start_link(id: shard_id, initial_kv: %{})
+    {:ok, shard_pid} = Shard.start_link(node_id: node_id, id: shard_id, initial_kv: %{})
 
     # --- Setup Watermarks ---
     send(shard_pid, {:read_watermark_advanced, key, 10})
@@ -535,8 +543,9 @@ defmodule Anoma.Node.Examples.EShard do
   @spec test_read_past_old_write_lock() :: ENode.t()
   def test_read_past_old_write_lock() do
     enode = ENode.start_node()
+    node_id = enode.node_id
     shard_id = :test_shard_read_past_lock
-    shard_via = Registry.via(Anoma.Node, {Shard, shard_id})
+    shard_via = Registry.via(node_id, Shard, shard_id)
     key = "a"
 
     h_lock = 5
@@ -545,7 +554,7 @@ defmodule Anoma.Node.Examples.EShard do
     h_read = 9
 
     # Start the shard with initial value
-    {:ok, shard_pid} = Shard.start_link(id: shard_id, initial_kv: %{})
+    {:ok, shard_pid} = Shard.start_link(node_id: node_id, id: shard_id, initial_kv: %{})
 
     # 1. Acquire write lock at h_lock (and HOLD it)
     {:ok, %{write: write_ref_lock}} = Shard.lock(shard_via, key, h_lock, :write)
