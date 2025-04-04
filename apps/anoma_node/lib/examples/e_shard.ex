@@ -582,4 +582,43 @@ defmodule Anoma.Node.Examples.EShard do
 
     enode
   end
+
+  @doc """
+  I test writing to an initially empty shard, advancing the write watermark,
+  and then performing reads both below and above the write height.
+  """
+  @spec test_write_then_reads_empty_start() :: ENode.t()
+  def test_write_then_reads_empty_start() do
+    enode = ENode.start_node()
+    node_id = enode.node_id
+    shard_id = :test_shard_empty_start_rw
+    shard_via = Registry.via(node_id, Shard, shard_id)
+    key = "a"
+    write_height = 10
+    write_value = 5
+    wm_height = 20
+    read_height_absent = 5
+    read_height_ok = 15
+
+    # Start the shard with empty initial state
+    {:ok, shard_pid} = Shard.start_link(node_id: node_id, id: shard_id, initial_kv: %{})
+
+    # 1. Write value at write_height
+    {:ok, %{write: write_ref}} = Shard.lock(shard_via, key, write_height, :write)
+    assert :ok == Shard.write(shard_via, key, write_value, write_height, write_ref)
+
+    # 2. Advance write watermark past the write and reads
+    send(shard_pid, {:write_watermark_advanced, key, wm_height})
+    Process.sleep(50) # Allow message processing
+
+    # 3. Read at height_absent (should be absent as latest < 5 is nothing)
+    {:ok, %{read: read_ref_absent}} = Shard.lock(shard_via, key, read_height_absent, :read)
+    assert Shard.read(shard_via, key, read_height_absent, read_ref_absent) == :absent
+
+    # 4. Read at height_ok (should see write_value as latest < 15 is at 10)
+    {:ok, %{read: read_ref_ok}} = Shard.lock(shard_via, key, read_height_ok, :read)
+    assert Shard.read(shard_via, key, read_height_ok, read_ref_ok) == {:ok, write_value}
+
+    enode
+  end
 end
