@@ -1012,6 +1012,56 @@ defmodule Nock.Jets do
     end
   end
 
+  @spec secp256k1_sign(Noun.t()) :: :error | {:ok, Noun.t()}
+  def secp256k1_sign(core) do
+    with {:ok, [msg | key]} when is_noun_atom(msg) and is_noun_atom(key) <-
+           sample(core),
+         {:ok, res} <-
+           ExSecp256k1.sign_compact(
+             Noun.atom_integer_to_binary(msg, 32),
+             Noun.atom_integer_to_binary(key, 32)
+           ) do
+      {:ok, Noun.Nounable.to_noun(res)}
+    else
+      _ -> :error
+    end
+  end
+
+  @spec secp256k1_verify(Noun.t()) :: :error | {:ok, Noun.t()}
+  def secp256k1_verify(core) do
+    with {:ok, [msg, sign | key]}
+         when is_noun_atom(msg) and is_noun_atom(sign) and is_noun_atom(key) <-
+           sample(core) do
+      res =
+        case ExSecp256k1.verify(
+               Noun.atom_integer_to_binary(msg, 32),
+               Noun.atom_integer_to_binary(sign, 64),
+               Noun.atom_integer_to_binary(key, 65)
+             ) do
+          :ok -> 0
+          _ -> 1
+        end
+
+      {:ok, res}
+    else
+      _ -> :error
+    end
+  end
+
+  @spec secp256k1_public_key(Noun.t()) :: :error | {:ok, Noun.t()}
+  def secp256k1_public_key(core) do
+    with {:ok, priv_key} when is_noun_atom(priv_key) <-
+           sample(core),
+         {:ok, key} <-
+           priv_key
+           |> Noun.atom_integer_to_binary(32)
+           |> ExSecp256k1.create_public_key() do
+      {:ok, key}
+    else
+      _ -> :error
+    end
+  end
+
   ############################################################
   #                   Arithmetic Helpers                     #
   ############################################################
