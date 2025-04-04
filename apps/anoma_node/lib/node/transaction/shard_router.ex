@@ -26,7 +26,8 @@ defmodule Anoma.Node.Transaction.ShardRouter do
   @type key_t :: binary()
 
   @typedoc "I am the name used to register a shard process via Registry."
-  @type shard_registry_name_t :: {:via, Registry, {module(), {module(), key_t()}}}
+  @type shard_registry_name_t ::
+          {:via, Registry, {module(), {module(), key_t()}}}
 
   @typedoc "I am the arguments passed to start_link. Requires node_id."
   @type args_t :: [node_id: String.t()]
@@ -62,7 +63,8 @@ defmodule Anoma.Node.Transaction.ShardRouter do
   in the ETS table (`:shard_key_map`).
   I return `{:ok, shard_registry_name}` if the key is found, otherwise `:error`.
   """
-  @spec get_shard_name(key :: key_t()) :: {:ok, shard_registry_name_t()} | :error
+  @spec get_shard_name(key :: key_t()) ::
+          {:ok, shard_registry_name_t()} | :error
   def get_shard_name(key) when is_binary(key) do
     # Call self - the GenServer registered under __MODULE__ name
     GenServer.call(__MODULE__, {:get_shard_name, key})
@@ -95,18 +97,26 @@ defmodule Anoma.Node.Transaction.ShardRouter do
   def handle_call({:get_shard_name, key}, _from, state) do
     try do
       lookup_result = :ets.lookup(@ets_table_name, key)
-      Logger.debug("ShardRouter: ETS lookup for key #{inspect(key)} returned: #{inspect(lookup_result)}")
+
+      Logger.debug(
+        "ShardRouter: ETS lookup for key #{inspect(key)} returned: #{inspect(lookup_result)}"
+      )
+
       reply =
         case lookup_result do
           [{^key, shard_name}] -> {:ok, shard_name}
           [] -> :error
         end
+
       {:reply, reply, state}
     catch
       kind, reason ->
-        Logger.error("ShardRouter: Error during ETS lookup for key #{inspect(key)} - Kind: #{kind}, Reason: #{inspect(reason)}, Stacktrace: #{inspect(__STACKTRACE__)}")
-        {:reply, :error, state} # Reply with error if ETS fails unexpectedly
+        Logger.error(
+          "ShardRouter: Error during ETS lookup for key #{inspect(key)} - Kind: #{kind}, Reason: #{inspect(reason)}, Stacktrace: #{inspect(__STACKTRACE__)}"
+        )
+
+        # Reply with error if ETS fails unexpectedly
+        {:reply, :error, state}
     end
   end
-
 end

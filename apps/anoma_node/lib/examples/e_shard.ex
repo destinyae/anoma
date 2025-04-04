@@ -27,7 +27,8 @@ defmodule Anoma.Node.Examples.EShard do
     }
 
     # Start the shard
-    {:ok, shard_pid} = Shard.start_link(node_id: node_id, id: shard_id, initial_kv: initial_kv)
+    {:ok, shard_pid} =
+      Shard.start_link(node_id: node_id, id: shard_id, initial_kv: initial_kv)
 
     # --- Simulate Watermark Advancement prior to acquiring locks ---
     send(shard_pid, {:write_watermark_advanced, "c", 5})
@@ -73,7 +74,8 @@ defmodule Anoma.Node.Examples.EShard do
     }
 
     # Start the shard
-    {:ok, shard_pid} = Shard.start_link(node_id: node_id, id: shard_id, initial_kv: initial_kv)
+    {:ok, shard_pid} =
+      Shard.start_link(node_id: node_id, id: shard_id, initial_kv: initial_kv)
 
     key = "a"
     height = 7
@@ -82,9 +84,10 @@ defmodule Anoma.Node.Examples.EShard do
     {:ok, %{read: read_ref}} = Shard.lock(shard_via, key, height, :read)
 
     # 2. Start the read in a separate task (it will block)
-    read_task = Task.async(fn ->
-      Shard.read(shard_via, key, height, read_ref)
-    end)
+    read_task =
+      Task.async(fn ->
+        Shard.read(shard_via, key, height, read_ref)
+      end)
 
     # Give the task a tiny moment to start and make the call
     Process.sleep(50)
@@ -123,36 +126,49 @@ defmodule Anoma.Node.Examples.EShard do
     key = "a"
     initial_value = 5
     read_height = 7
-    write_height = 5 # Height for the intermediate write
-    write_value = 10 # Value for the intermediate write
+    # Height for the intermediate write
+    write_height = 5
+    # Value for the intermediate write
+    write_value = 10
 
     initial_kv = %{
       key => initial_value
     }
 
     # Start the shard
-    {:ok, shard_pid} = Shard.start_link(node_id: node_id, id: shard_id, initial_kv: initial_kv)
+    {:ok, shard_pid} =
+      Shard.start_link(node_id: node_id, id: shard_id, initial_kv: initial_kv)
 
     # 1. Acquire Read Lock for the future read
     {:ok, %{read: read_ref}} = Shard.lock(shard_via, key, read_height, :read)
 
     # 2. Start the read in a separate task (it will block)
-    read_task = Task.async(fn ->
-      Shard.read(shard_via, key, read_height, read_ref)
-    end)
+    read_task =
+      Task.async(fn ->
+        Shard.read(shard_via, key, read_height, read_ref)
+      end)
 
     # Give the task a moment to start and block on the read call
     Process.sleep(50)
 
     # 3. Acquire Write Lock for an intermediate height BEFORE watermark advances
-    {:ok, %{write: write_ref_intermediate}} = Shard.lock(shard_via, key, write_height, :write)
+    {:ok, %{write: write_ref_intermediate}} =
+      Shard.lock(shard_via, key, write_height, :write)
 
     # 4. Advance the watermark AFTER the read call is blocked, enabling read resolution
-    send(shard_pid, {:write_watermark_advanced, key, read_height + 1}) # WM >= read_height
+    # WM >= read_height
+    send(shard_pid, {:write_watermark_advanced, key, read_height + 1})
 
     # 5. Perform the Write AFTER watermark advanced but potentially before read task resumes
     # This write should be visible to the resolving read at height 7.
-    assert :ok == Shard.write(shard_via, key, write_value, write_height, write_ref_intermediate)
+    assert :ok ==
+             Shard.write(
+               shard_via,
+               key,
+               write_value,
+               write_height,
+               write_ref_intermediate
+             )
 
     # 6. Await the result from the read task (should unblock due to WM)
     # Use a timeout to prevent hangs
@@ -180,7 +196,8 @@ defmodule Anoma.Node.Examples.EShard do
     shard_via = Registry.via(node_id, Shard, shard_id)
 
     # Start the shard (initial state doesn't matter)
-    {:ok, _shard_pid} = Shard.start_link(node_id: node_id, id: shard_id, initial_kv: %{})
+    {:ok, _shard_pid} =
+      Shard.start_link(node_id: node_id, id: shard_id, initial_kv: %{})
 
     key = "a"
     height = 5
@@ -189,19 +206,21 @@ defmodule Anoma.Node.Examples.EShard do
     {:ok, %{read: read_ref}} = Shard.lock(shard_via, key, height, :read)
 
     # 2. Start the read in a separate task (it will block)
-    read_task = Task.async(fn ->
-      # Note: The GenServer.call within Shard.read uses :infinity,
-      # so this task itself won't timeout internally. The timeout
-      # comes from Task.await below.
-      Shard.read(shard_via, key, height, read_ref)
-    end)
+    read_task =
+      Task.async(fn ->
+        # Note: The GenServer.call within Shard.read uses :infinity,
+        # so this task itself won't timeout internally. The timeout
+        # comes from Task.await below.
+        Shard.read(shard_via, key, height, read_ref)
+      end)
 
     # 3. DO NOT advance the watermark
 
     # 4. Await the result with a short timeout
     # We expect this to exit with reason :timeout
     try do
-      Task.await(read_task, 100) # 100ms timeout
+      # 100ms timeout
+      Task.await(read_task, 100)
       # If await succeeds, the test fails
       flunk("Task.await should have timed out and exited, but it returned.")
     catch
@@ -212,7 +231,8 @@ defmodule Anoma.Node.Examples.EShard do
     end
 
     # Ensure the task is shut down to avoid lingering processes
-    if Process.alive?(read_task.pid), do: Task.shutdown(read_task, :brutal_kill)
+    if Process.alive?(read_task.pid),
+      do: Task.shutdown(read_task, :brutal_kill)
 
     enode
   end
@@ -236,19 +256,30 @@ defmodule Anoma.Node.Examples.EShard do
     watermark_height = 10
 
     # Start the shard with an initial value
-    {:ok, shard_pid} = Shard.start_link(node_id: node_id, id: shard_id, initial_kv: %{key => initial_value})
+    {:ok, shard_pid} =
+      Shard.start_link(
+        node_id: node_id,
+        id: shard_id,
+        initial_kv: %{key => initial_value}
+      )
 
     # 1. Acquire Locks
-    {:ok, %{read: read_ref_ok}} = Shard.lock(shard_via, key, read_height_ok, :read)
-    {:ok, %{read: read_ref_timeout}} = Shard.lock(shard_via, key, read_height_timeout, :read)
+    {:ok, %{read: read_ref_ok}} =
+      Shard.lock(shard_via, key, read_height_ok, :read)
+
+    {:ok, %{read: read_ref_timeout}} =
+      Shard.lock(shard_via, key, read_height_timeout, :read)
 
     # 2. Start Read Tasks (both will block initially)
-    read_task_ok = Task.async(fn ->
-      Shard.read(shard_via, key, read_height_ok, read_ref_ok)
-    end)
-    read_task_timeout = Task.async(fn ->
-      Shard.read(shard_via, key, read_height_timeout, read_ref_timeout)
-    end)
+    read_task_ok =
+      Task.async(fn ->
+        Shard.read(shard_via, key, read_height_ok, read_ref_ok)
+      end)
+
+    read_task_timeout =
+      Task.async(fn ->
+        Shard.read(shard_via, key, read_height_timeout, read_ref_timeout)
+      end)
 
     # Give tasks time to start and block
     Process.sleep(50)
@@ -257,21 +288,27 @@ defmodule Anoma.Node.Examples.EShard do
     send(shard_pid, {:write_watermark_advanced, key, watermark_height})
 
     # 4. Await the read that should succeed
-    result_ok = Task.await(read_task_ok, 1000) # Generous timeout
+    # Generous timeout
+    result_ok = Task.await(read_task_ok, 1000)
     # Read at height 5 resolves based on latest write < 5, which is height -1
     assert result_ok == {:ok, initial_value}
 
     # 5. Await the read that should time out
     try do
-      Task.await(read_task_timeout, 100) # Short timeout
-      flunk("Task for height #{read_height_timeout} should have timed out, but it returned.")
+      # Short timeout
+      Task.await(read_task_timeout, 100)
+
+      flunk(
+        "Task for height #{read_height_timeout} should have timed out, but it returned."
+      )
     catch
       :exit, reason ->
         assert reason == :timeout or match?({:timeout, _}, reason)
     end
 
     # Ensure the timed-out task is shut down
-    if Process.alive?(read_task_timeout.pid), do: Task.shutdown(read_task_timeout, :brutal_kill)
+    if Process.alive?(read_task_timeout.pid),
+      do: Task.shutdown(read_task_timeout, :brutal_kill)
 
     enode
   end
@@ -293,7 +330,8 @@ defmodule Anoma.Node.Examples.EShard do
     }
 
     # Start the shard
-    {:ok, shard_pid} = Shard.start_link(node_id: node_id, id: shard_id, initial_kv: initial_kv)
+    {:ok, shard_pid} =
+      Shard.start_link(node_id: node_id, id: shard_id, initial_kv: initial_kv)
 
     # --- Acquire Write Locks ---
     {:ok, %{write: write_ref_5}} = Shard.lock(shard_via, key, 5, :write)
@@ -317,27 +355,37 @@ defmodule Anoma.Node.Examples.EShard do
 
     # --- Simulate Watermark Advancements ---
     # Reads 0, 4, 5 depend on initial state (implied WM >= 0)
-    send(shard_pid, {:write_watermark_advanced, key, 0}) # Effectively done by init
+    # Effectively done by init
+    send(shard_pid, {:write_watermark_advanced, key, 0})
 
     # Read 6 needs to see write at 5
     send(shard_pid, {:write_watermark_advanced, key, 6})
 
     # Reads 7, 9, 10 need to see write at 6
-    send(shard_pid, {:write_watermark_advanced, key, 7}) # WM advances to max(current, new)
+    # WM advances to max(current, new)
+    send(shard_pid, {:write_watermark_advanced, key, 7})
 
     # Read 11 needs to see write at 10
     send(shard_pid, {:write_watermark_advanced, key, 11})
 
     # --- Test Reads ---
     # Read height h resolves based on latest write < h, provided WM >= h
-    assert Shard.read(shard_via, key, 0, read_ref_0) == {:ok, 3} # Before any writes
-    assert Shard.read(shard_via, key, 4, read_ref_4) == {:ok, 3} # Before write@5
-    assert Shard.read(shard_via, key, 5, read_ref_5) == {:ok, 3} # Before write@5
-    assert Shard.read(shard_via, key, 6, read_ref_6) == {:ok, 7} # Sees write@5
-    assert Shard.read(shard_via, key, 7, read_ref_7) == {:ok, 2} # Sees write@6
-    assert Shard.read(shard_via, key, 9, read_ref_9) == {:ok, 2} # Sees write@6
-    assert Shard.read(shard_via, key, 10, read_ref_10) == {:ok, 2} # Sees write@6
-    assert Shard.read(shard_via, key, 11, read_ref_11) == {:ok, 8} # Sees write@10
+    # Before any writes
+    assert Shard.read(shard_via, key, 0, read_ref_0) == {:ok, 3}
+    # Before write@5
+    assert Shard.read(shard_via, key, 4, read_ref_4) == {:ok, 3}
+    # Before write@5
+    assert Shard.read(shard_via, key, 5, read_ref_5) == {:ok, 3}
+    # Sees write@5
+    assert Shard.read(shard_via, key, 6, read_ref_6) == {:ok, 7}
+    # Sees write@6
+    assert Shard.read(shard_via, key, 7, read_ref_7) == {:ok, 2}
+    # Sees write@6
+    assert Shard.read(shard_via, key, 9, read_ref_9) == {:ok, 2}
+    # Sees write@6
+    assert Shard.read(shard_via, key, 10, read_ref_10) == {:ok, 2}
+    # Sees write@10
+    assert Shard.read(shard_via, key, 11, read_ref_11) == {:ok, 8}
 
     enode
   end
@@ -358,7 +406,8 @@ defmodule Anoma.Node.Examples.EShard do
     initial_kv = %{key => 3}
 
     # Start the shard
-    {:ok, shard_pid} = Shard.start_link(node_id: node_id, id: shard_id, initial_kv: initial_kv)
+    {:ok, shard_pid} =
+      Shard.start_link(node_id: node_id, id: shard_id, initial_kv: initial_kv)
 
     # --- Writes ---
     write_ops = %{
@@ -379,11 +428,21 @@ defmodule Anoma.Node.Examples.EShard do
     kv1 = state1.kv[key]
 
     assert Map.get(kv1, -1).value == 3
-    assert Map.get(kv1, 9).value == 5 and is_nil(Map.get(kv1, 9).write_lock_ref)
-    assert Map.get(kv1, 15).value == 12 and is_nil(Map.get(kv1, 15).write_lock_ref)
-    assert Map.get(kv1, 30).value == 16 and is_nil(Map.get(kv1, 30).write_lock_ref)
-    assert Map.get(kv1, 32).value == 8 and is_nil(Map.get(kv1, 32).write_lock_ref)
-    assert map_size(kv1) == 5 # -1, 9, 15, 30, 32
+
+    assert Map.get(kv1, 9).value == 5 and
+             is_nil(Map.get(kv1, 9).write_lock_ref)
+
+    assert Map.get(kv1, 15).value == 12 and
+             is_nil(Map.get(kv1, 15).write_lock_ref)
+
+    assert Map.get(kv1, 30).value == 16 and
+             is_nil(Map.get(kv1, 30).write_lock_ref)
+
+    assert Map.get(kv1, 32).value == 8 and
+             is_nil(Map.get(kv1, 32).write_lock_ref)
+
+    # -1, 9, 15, 30, 32
+    assert map_size(kv1) == 5
 
     # --- Read Lock ---
     {:ok, %{read: read_ref_17}} = Shard.lock(shard_via, key, 17, :read)
@@ -393,7 +452,8 @@ defmodule Anoma.Node.Examples.EShard do
     kv2 = state2.kv[key]
     assert kv2[17].read_lock_ref == read_ref_17
     assert is_nil(kv2[17].value)
-    assert map_size(kv2) == 6 # Added entry for height 17
+    # Added entry for height 17
+    assert map_size(kv2) == 6
 
     # --- Advance Read Watermark (GC Trigger) ---
     send(shard_pid, {:read_watermark_advanced, key, 33})
@@ -409,11 +469,14 @@ defmodule Anoma.Node.Examples.EShard do
     # - 17: Kept because it holds the active read lock.
     # - 32: Kept because it's the latest entry <= the watermark 33.
     assert Map.has_key?(kv3, 15)
-    assert Map.get(kv3, 15).value == 12 # Check value consistency
+    # Check value consistency
+    assert Map.get(kv3, 15).value == 12
     assert Map.has_key?(kv3, 17)
-    assert kv3[17].read_lock_ref == read_ref_17 # Lock still held
+    # Lock still held
+    assert kv3[17].read_lock_ref == read_ref_17
     assert Map.has_key?(kv3, 32)
-    assert Map.get(kv3, 32).value == 8 # Check value consistency
+    # Check value consistency
+    assert Map.get(kv3, 32).value == 8
     assert map_size(kv3) == 3
     # Ensure others are gone
     refute Map.has_key?(kv3, -1)
@@ -429,11 +492,14 @@ defmodule Anoma.Node.Examples.EShard do
     # --- Direct State Check (Post-Read) ---
     state4 = :sys.get_state(shard_pid)
     kv4 = state4.kv[key]
-    assert Map.has_key?(kv4, 17) # Entry should still exist
-    assert is_nil(kv4[17].read_lock_ref) # Lock should be released
+    # Entry should still exist
+    assert Map.has_key?(kv4, 17)
+    # Lock should be released
+    assert is_nil(kv4[17].read_lock_ref)
     assert is_nil(kv4[17].value)
     assert is_nil(kv4[17].write_lock_ref)
-    assert map_size(kv4) == 3 # Size remains same, just lock released
+    # Size remains same, just lock released
+    assert map_size(kv4) == 3
 
     # --- Advance Read Watermark Again (Clean up entry 17) ---
     send(shard_pid, {:read_watermark_advanced, key, 34})
@@ -469,68 +535,102 @@ defmodule Anoma.Node.Examples.EShard do
     key = "a"
 
     # Start the shard (empty initial state)
-    {:ok, shard_pid} = Shard.start_link(node_id: node_id, id: shard_id, initial_kv: %{})
+    {:ok, shard_pid} =
+      Shard.start_link(node_id: node_id, id: shard_id, initial_kv: %{})
 
     # --- Setup Watermarks ---
     send(shard_pid, {:read_watermark_advanced, key, 10})
     send(shard_pid, {:write_watermark_advanced, key, 10})
-    Process.sleep(50) # Allow messages to process
+    # Allow messages to process
+    Process.sleep(50)
 
     # --- Test Locking Below Watermarks (Height 5) ---
-    assert Shard.lock(shard_via, key, 5, :read) == {:error, :locking_read_past_read_watermark}
-    assert Shard.lock(shard_via, key, 5, :write) == {:error, :locking_write_past_write_watermark}
+    assert Shard.lock(shard_via, key, 5, :read) ==
+             {:error, :locking_read_past_read_watermark}
+
+    assert Shard.lock(shard_via, key, 5, :write) ==
+             {:error, :locking_write_past_write_watermark}
+
     # Write check happens first for :read_write
-    assert Shard.lock(shard_via, key, 5, :read_write) == {:error, :locking_write_past_write_watermark}
+    assert Shard.lock(shard_via, key, 5, :read_write) ==
+             {:error, :locking_write_past_write_watermark}
 
     # --- Test Lock Re-acquisition (Height 15) ---
     # Sequence: read -> read -> write -> write -> read
 
     # 1st Read
-    {:ok, %{read: read_ref_15_a, write: nil}} = Shard.lock(shard_via, key, 15, :read)
+    {:ok, %{read: read_ref_15_a, write: nil}} =
+      Shard.lock(shard_via, key, 15, :read)
+
     assert is_reference(read_ref_15_a)
 
     # 2nd Read (should return same ref)
-    {:ok, %{read: read_ref_15_b, write: nil}} = Shard.lock(shard_via, key, 15, :read)
+    {:ok, %{read: read_ref_15_b, write: nil}} =
+      Shard.lock(shard_via, key, 15, :read)
+
     assert read_ref_15_a == read_ref_15_b
 
     # 1st Write (acquire alongside read)
-    {:ok, %{read: read_ref_15_c, write: write_ref_15_a}} = Shard.lock(shard_via, key, 15, :write)
-    assert read_ref_15_a == read_ref_15_c # Read ref should persist
+    {:ok, %{read: read_ref_15_c, write: write_ref_15_a}} =
+      Shard.lock(shard_via, key, 15, :write)
+
+    # Read ref should persist
+    assert read_ref_15_a == read_ref_15_c
     assert is_reference(write_ref_15_a)
 
     # 2nd Write (should return same refs)
-    {:ok, %{read: read_ref_15_d, write: write_ref_15_b}} = Shard.lock(shard_via, key, 15, :write)
+    {:ok, %{read: read_ref_15_d, write: write_ref_15_b}} =
+      Shard.lock(shard_via, key, 15, :write)
+
     assert read_ref_15_a == read_ref_15_d
     assert write_ref_15_a == write_ref_15_b
 
     # 3rd Read (should return same refs)
-    {:ok, %{read: read_ref_15_e, write: write_ref_15_c}} = Shard.lock(shard_via, key, 15, :read)
+    {:ok, %{read: read_ref_15_e, write: write_ref_15_c}} =
+      Shard.lock(shard_via, key, 15, :read)
+
     assert read_ref_15_a == read_ref_15_e
     assert write_ref_15_a == write_ref_15_c
 
     # --- Test Write Blocking Lock Acquisition (Height 20) ---
     # First, write a value to height 20
-    {:ok, %{write: write_ref_20_setup}} = Shard.lock(shard_via, key, 20, :write)
-    assert :ok == Shard.write(shard_via, key, "value_at_20", 20, write_ref_20_setup)
+    {:ok, %{write: write_ref_20_setup}} =
+      Shard.lock(shard_via, key, 20, :write)
+
+    assert :ok ==
+             Shard.write(
+               shard_via,
+               key,
+               "value_at_20",
+               20,
+               write_ref_20_setup
+             )
 
     # Sequence: write -> write -> read -> read -> write
 
     # 1st Write (should fail due to existing value)
-    assert Shard.lock(shard_via, key, 20, :write) == {:error, :slot_occupied_by_value}
+    assert Shard.lock(shard_via, key, 20, :write) ==
+             {:error, :slot_occupied_by_value}
 
     # 2nd Write (should fail)
-    assert Shard.lock(shard_via, key, 20, :write) == {:error, :slot_occupied_by_value}
+    assert Shard.lock(shard_via, key, 20, :write) ==
+             {:error, :slot_occupied_by_value}
 
     # 1st Read (should succeed even with value)
-    {:ok, %{read: read_ref_20_a, write: nil}} = Shard.lock(shard_via, key, 20, :read)
+    {:ok, %{read: read_ref_20_a, write: nil}} =
+      Shard.lock(shard_via, key, 20, :read)
+
     assert is_reference(read_ref_20_a)
 
     # 2nd Read (should succeed, return same ref)
-    {:ok, %{read: read_ref_20_b, write: nil}} = Shard.lock(shard_via, key, 20, :read)
+    {:ok, %{read: read_ref_20_b, write: nil}} =
+      Shard.lock(shard_via, key, 20, :read)
+
     assert read_ref_20_a == read_ref_20_b
 
     # 3rd Write (should fail)
-    assert Shard.lock(shard_via, key, 20, :write) == {:error, :slot_occupied_by_value}
+    assert Shard.lock(shard_via, key, 20, :write) ==
+             {:error, :slot_occupied_by_value}
 
     enode
   end
@@ -554,20 +654,32 @@ defmodule Anoma.Node.Examples.EShard do
     h_read = 9
 
     # Start the shard with initial value
-    {:ok, shard_pid} = Shard.start_link(node_id: node_id, id: shard_id, initial_kv: %{})
+    {:ok, shard_pid} =
+      Shard.start_link(node_id: node_id, id: shard_id, initial_kv: %{})
 
     # 1. Acquire write lock at h_lock (and HOLD it)
-    {:ok, %{write: write_ref_lock}} = Shard.lock(shard_via, key, h_lock, :write)
+    {:ok, %{write: write_ref_lock}} =
+      Shard.lock(shard_via, key, h_lock, :write)
 
     # 2. Write successfully at h_write
-    {:ok, %{write: write_ref_write}} = Shard.lock(shard_via, key, h_write, :write)
-    assert :ok == Shard.write(shard_via, key, write_value, h_write, write_ref_write)
+    {:ok, %{write: write_ref_write}} =
+      Shard.lock(shard_via, key, h_write, :write)
+
+    assert :ok ==
+             Shard.write(
+               shard_via,
+               key,
+               write_value,
+               h_write,
+               write_ref_write
+             )
 
     # 3. Acquire read lock at h_read
     {:ok, %{read: read_ref_read}} = Shard.lock(shard_via, key, h_read, :read)
 
     # 4. Advance write watermark to allow the read at h_read
-    send(shard_pid, {:write_watermark_advanced, key, h_read + 1}) # WM >= 9
+    # WM >= 9
+    send(shard_pid, {:write_watermark_advanced, key, h_read + 1})
 
     # 5. Perform the read at h_read
     result = Shard.read(shard_via, key, h_read, read_ref_read)
@@ -601,23 +713,34 @@ defmodule Anoma.Node.Examples.EShard do
     read_height_ok = 15
 
     # Start the shard with empty initial state
-    {:ok, shard_pid} = Shard.start_link(node_id: node_id, id: shard_id, initial_kv: %{})
+    {:ok, shard_pid} =
+      Shard.start_link(node_id: node_id, id: shard_id, initial_kv: %{})
 
     # 1. Write value at write_height
-    {:ok, %{write: write_ref}} = Shard.lock(shard_via, key, write_height, :write)
-    assert :ok == Shard.write(shard_via, key, write_value, write_height, write_ref)
+    {:ok, %{write: write_ref}} =
+      Shard.lock(shard_via, key, write_height, :write)
+
+    assert :ok ==
+             Shard.write(shard_via, key, write_value, write_height, write_ref)
 
     # 2. Advance write watermark past the write and reads
     send(shard_pid, {:write_watermark_advanced, key, wm_height})
-    Process.sleep(50) # Allow message processing
+    # Allow message processing
+    Process.sleep(50)
 
     # 3. Read at height_absent (should be absent as latest < 5 is nothing)
-    {:ok, %{read: read_ref_absent}} = Shard.lock(shard_via, key, read_height_absent, :read)
-    assert Shard.read(shard_via, key, read_height_absent, read_ref_absent) == :absent
+    {:ok, %{read: read_ref_absent}} =
+      Shard.lock(shard_via, key, read_height_absent, :read)
+
+    assert Shard.read(shard_via, key, read_height_absent, read_ref_absent) ==
+             :absent
 
     # 4. Read at height_ok (should see write_value as latest < 15 is at 10)
-    {:ok, %{read: read_ref_ok}} = Shard.lock(shard_via, key, read_height_ok, :read)
-    assert Shard.read(shard_via, key, read_height_ok, read_ref_ok) == {:ok, write_value}
+    {:ok, %{read: read_ref_ok}} =
+      Shard.lock(shard_via, key, read_height_ok, :read)
+
+    assert Shard.read(shard_via, key, read_height_ok, read_ref_ok) ==
+             {:ok, write_value}
 
     enode
   end

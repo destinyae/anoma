@@ -41,7 +41,8 @@ defmodule Anoma.Node.Transaction.Shard do
   @type key :: binary()
 
   @typedoc "The height associated with an operation."
-  @type height :: integer() # Allows -1 for initial state
+  # Allows -1 for initial state
+  @type height :: integer()
 
   @typedoc "The value stored for a key at a height."
   @type value :: any()
@@ -54,10 +55,13 @@ defmodule Anoma.Node.Transaction.Shard do
 
   @typedoc "Stores the details for a specific {key, height}."
   @type kv_entry_details :: %{
-    value: value() | nil,           # The actual value, nil if not written yet
-    read_lock_ref: reference() | nil,  # The ref if read-locked, nil otherwise
-    write_lock_ref: reference() | nil # The ref if write-locked, nil otherwise
-  }
+          # The actual value, nil if not written yet
+          value: value() | nil,
+          # The ref if read-locked, nil otherwise
+          read_lock_ref: reference() | nil,
+          # The ref if write-locked, nil otherwise
+          write_lock_ref: reference() | nil
+        }
 
   ############################################################
   #                         State                            #
@@ -74,9 +78,24 @@ defmodule Anoma.Node.Transaction.Shard do
     - `:pending_reads` - Reads waiting for watermark advancement: `key => height => GenServer.from()`.
     """
     field(:id, any())
-    field(:kv, %{required(key()) => %{required(height()) => kv_entry_details()}}, default: %{})
-    field(:watermarks, %{required(key()) => %{read: height(), write: height()}}, default: %{})
-    field(:pending_reads, %{required(key()) => %{required(height()) => GenServer.from()}}, default: %{})
+
+    field(
+      :kv,
+      %{required(key()) => %{required(height()) => kv_entry_details()}},
+      default: %{}
+    )
+
+    field(
+      :watermarks,
+      %{required(key()) => %{read: height(), write: height()}},
+      default: %{}
+    )
+
+    field(
+      :pending_reads,
+      %{required(key()) => %{required(height()) => GenServer.from()}},
+      default: %{}
+    )
   end
 
   ############################################################
@@ -104,8 +123,11 @@ defmodule Anoma.Node.Transaction.Shard do
   the relevant lock references on success, or an error tuple.
   """
   @spec lock(pid() | Registry.via(), key(), height(), capabilities()) ::
-          {:ok, %{read: reference() | nil, write: reference() | nil}} |
-          {:error, :locking_write_past_write_watermark | :locking_read_past_read_watermark | :slot_occupied_by_value}
+          {:ok, %{read: reference() | nil, write: reference() | nil}}
+          | {:error,
+             :locking_write_past_write_watermark
+             | :locking_read_past_read_watermark
+             | :slot_occupied_by_value}
   def lock(shard_pid, key, height, type) do
     # Todo: Timeout?
     GenServer.call(shard_pid, {:lock, key, height, type}, :infinity)
@@ -121,7 +143,9 @@ defmodule Anoma.Node.Transaction.Shard do
   Returns `{:ok, value}`, `:absent`, or an error tuple.
   """
   @spec read(pid() | Registry.via(), key(), height(), read_ref :: reference()) ::
-          {:ok, value()} | :absent | {:error, :invalid_or_missing_lock_ref | :read_already_pending}
+          {:ok, value()}
+          | :absent
+          | {:error, :invalid_or_missing_lock_ref | :read_already_pending}
   def read(shard_pid, key, height, read_ref) do
     # Use call and wait for the actual result or error
     GenServer.call(shard_pid, {:read, key, height, read_ref}, :infinity)
@@ -134,11 +158,21 @@ defmodule Anoma.Node.Transaction.Shard do
   obtained from a prior `lock` call.
   I return `:ok` on success, or an error tuple.
   """
-  @spec write(pid() | Registry.via(), key(), value(), height(), write_ref :: reference()) ::
+  @spec write(
+          pid() | Registry.via(),
+          key(),
+          value(),
+          height(),
+          write_ref :: reference()
+        ) ::
           :ok | {:error, :write_lock_required | :invalid_lock_ref}
   def write(shard_pid, key, value, height, write_ref) do
     # Using call to get confirmation/error back
-    GenServer.call(shard_pid, {:write, key, value, height, write_ref}, :infinity)
+    GenServer.call(
+      shard_pid,
+      {:write, key, value, height, write_ref},
+      :infinity
+    )
   end
 
   ############################################################
@@ -155,16 +189,26 @@ defmodule Anoma.Node.Transaction.Shard do
     # Register the shard process
     case Registry.register(node_id, __MODULE__, id) do
       {:ok, _pid} ->
-        Logger.debug("Shard #{id} successfully registered for node #{node_id}")
+        Logger.debug(
+          "Shard #{id} successfully registered for node #{node_id}"
+        )
+
       {:error, reason} ->
-        Logger.error("Shard #{id} failed to register for node #{node_id}: #{inspect(reason)}")
+        Logger.error(
+          "Shard #{id} failed to register for node #{node_id}: #{inspect(reason)}"
+        )
     end
 
     # Initialize KV with schema values at height -1 using the new structure
     kv =
       Enum.reduce(initial_kv_arg, %{}, fn {key, value}, acc ->
         # Initial state: has value, no locks
-        initial_details = %{value: value, read_lock_ref: nil, write_lock_ref: nil}
+        initial_details = %{
+          value: value,
+          read_lock_ref: nil,
+          write_lock_ref: nil
+        }
+
         Map.put(acc, key, %{-1 => initial_details})
       end)
 
@@ -201,13 +245,18 @@ defmodule Anoma.Node.Transaction.Shard do
 
       # Cannot acquire READ lock at or below the READ watermark
       type in [:read, :read_write] and height <= key_watermarks.read ->
-         {:reply, {:error, :locking_read_past_read_watermark}, state}
+        {:reply, {:error, :locking_read_past_read_watermark}, state}
 
       # Height is valid relative to relevant watermarks, proceed
       true ->
         key_height_map = Map.get(state.kv, key, %{})
         # Get current details or default to empty
-        details = Map.get(key_height_map, height, %{value: nil, read_lock_ref: nil, write_lock_ref: nil})
+        details =
+          Map.get(key_height_map, height, %{
+            value: nil,
+            read_lock_ref: nil,
+            write_lock_ref: nil
+          })
 
         # Process Read Lock Request
         {details_after_read, new_read_ref} =
@@ -228,7 +277,8 @@ defmodule Anoma.Node.Transaction.Shard do
 
             not is_nil(details_after_read.value) ->
               # Cannot acquire write lock if value already exists
-              {details_after_read, details_after_read.write_lock_ref, :slot_occupied_by_value}
+              {details_after_read, details_after_read.write_lock_ref,
+               :slot_occupied_by_value}
 
             is_nil(details_after_read.write_lock_ref) ->
               # Acquire new write lock
@@ -246,14 +296,20 @@ defmodule Anoma.Node.Transaction.Shard do
         else
           # Update state only if changes occurred
           final_details = details_after_write
+
           if final_details != details do
-             new_key_height_map = Map.put(key_height_map, height, final_details)
-             new_kv = Map.put(state.kv, key, new_key_height_map)
-             new_state = %{state | kv: new_kv}
-             {:reply, {:ok, %{read: new_read_ref, write: new_write_ref}}, new_state}
+            new_key_height_map =
+              Map.put(key_height_map, height, final_details)
+
+            new_kv = Map.put(state.kv, key, new_key_height_map)
+            new_state = %{state | kv: new_kv}
+
+            {:reply, {:ok, %{read: new_read_ref, write: new_write_ref}},
+             new_state}
           else
-             # No change in lock status (e.g., locks already held)
-             {:reply, {:ok, %{read: new_read_ref, write: new_write_ref}}, state}
+            # No change in lock status (e.g., locks already held)
+            {:reply, {:ok, %{read: new_read_ref, write: new_write_ref}},
+             state}
           end
         end
     end
@@ -263,74 +319,105 @@ defmodule Anoma.Node.Transaction.Shard do
   @impl true
   def handle_call({:write, key, value, height, write_ref}, _from, state) do
     key_height_map = Map.get(state.kv, key, %{})
-    details = Map.get(key_height_map, height, %{value: nil, read_lock_ref: nil, write_lock_ref: nil})
+
+    details =
+      Map.get(key_height_map, height, %{
+        value: nil,
+        read_lock_ref: nil,
+        write_lock_ref: nil
+      })
 
     cond do
       is_nil(details.write_lock_ref) ->
-         {:reply, {:error, :write_lock_required}, state}
+        {:reply, {:error, :write_lock_required}, state}
 
       details.write_lock_ref != write_ref ->
-         {:reply, {:error, :invalid_lock_ref}, state}
+        {:reply, {:error, :invalid_lock_ref}, state}
 
       true ->
-         # Valid write lock ref
-         # Update value, clear write lock ref, KEEP read lock ref
-         updated_details = %{details | value: value, write_lock_ref: nil}
-         new_key_height_map = Map.put(key_height_map, height, updated_details)
-         new_kv = Map.put(state.kv, key, new_key_height_map)
-         new_state = %{state | kv: new_kv}
-         # Check pending reads *after* state update (write might allow resolution if watermark matches)
-         final_state = check_pending_reads_for_write(key, height, new_state)
-         {:reply, :ok, final_state}
+        # Valid write lock ref
+        # Update value, clear write lock ref, KEEP read lock ref
+        updated_details = %{details | value: value, write_lock_ref: nil}
+        new_key_height_map = Map.put(key_height_map, height, updated_details)
+        new_kv = Map.put(state.kv, key, new_key_height_map)
+        new_state = %{state | kv: new_kv}
+
+        # Check pending reads *after* state update (write might allow resolution if watermark matches)
+        final_state = check_pending_reads_for_write(key, height, new_state)
+        {:reply, :ok, final_state}
     end
   end
 
   # --- Read Handling ---
   @impl true
   def handle_call({:read, key, height_req, read_ref}, from, state) do
-     # --- Validation ---
-     key_height_map = Map.get(state.kv, key, %{})
-     details_at_req = Map.get(key_height_map, height_req, %{value: nil, read_lock_ref: nil, write_lock_ref: nil})
+    # --- Validation ---
+    key_height_map = Map.get(state.kv, key, %{})
 
-     cond do
-       # 1. Invalid Lock Ref
-       is_nil(details_at_req.read_lock_ref) or details_at_req.read_lock_ref != read_ref ->
-         {:reply, {:error, :invalid_or_missing_lock_ref}, state}
+    details_at_req =
+      Map.get(key_height_map, height_req, %{
+        value: nil,
+        read_lock_ref: nil,
+        write_lock_ref: nil
+      })
 
-       # 2. Read Already Pending
-       !is_nil(get_in(state.pending_reads, [key, height_req])) ->
-         {:reply, {:error, :read_already_pending}, state}
+    cond do
+      # 1. Invalid Lock Ref
+      is_nil(details_at_req.read_lock_ref) or
+          details_at_req.read_lock_ref != read_ref ->
+        {:reply, {:error, :invalid_or_missing_lock_ref}, state}
 
-       # 3. Attempt Resolution
-       true ->
-          key_watermarks = Map.get(state.watermarks, key, %{read: -1, write: -1})
-          resolution_result = resolve_read_value(height_req, key_height_map, key_watermarks)
+      # 2. Read Already Pending
+      !is_nil(get_in(state.pending_reads, [key, height_req])) ->
+        {:reply, {:error, :read_already_pending}, state}
 
-          case resolution_result do
-             {:ok, value_or_absent} -> # Includes {:ok, :absent} or {:ok, {:ok, val}}
-                # Resolve succeeded, release lock and reply
-                new_state =
-                  if details_at_req.read_lock_ref == read_ref do
-                     updated_details = %{details_at_req | read_lock_ref: nil}
-                     new_key_height_map = Map.put(key_height_map, height_req, updated_details)
-                     new_kv = Map.put(state.kv, key, new_key_height_map)
-                     %{state | kv: new_kv}
-                  else
-                     # Should ideally not happen due to check 1, but log if it does
-                     Logger.warning("Shard #{inspect(state.id)}: Read resolved for key #{inspect(key)}, height #{height_req}, but read_ref #{inspect(read_ref)} did not match stored ref #{inspect(details_at_req.read_lock_ref)} during release.")
-                     state
-                  end
-                # Map internal {:ok, :absent} to just :absent for the caller
-                {:reply, value_or_absent, new_state}
+      # 3. Attempt Resolution
+      true ->
+        key_watermarks =
+          Map.get(state.watermarks, key, %{read: -1, write: -1})
 
-             block_reason when block_reason in [:blocked_by_watermark, :blocked_by_write_lock] ->
-                # Queue the read
-                pending_for_key = Map.get(state.pending_reads, key, %{})
-                updated_pending_for_key = Map.put(pending_for_key, height_req, from)
-                new_pending_reads = Map.put(state.pending_reads, key, updated_pending_for_key)
-                {:noreply, %{state | pending_reads: new_pending_reads}}
-          end
-     end
+        resolution_result =
+          resolve_read_value(height_req, key_height_map, key_watermarks)
+
+        case resolution_result do
+          # Includes {:ok, :absent} or {:ok, {:ok, val}}
+          {:ok, value_or_absent} ->
+            # Resolve succeeded, release lock and reply
+            new_state =
+              if details_at_req.read_lock_ref == read_ref do
+                updated_details = %{details_at_req | read_lock_ref: nil}
+
+                new_key_height_map =
+                  Map.put(key_height_map, height_req, updated_details)
+
+                new_kv = Map.put(state.kv, key, new_key_height_map)
+                %{state | kv: new_kv}
+              else
+                # Should ideally not happen due to check 1, but log if it does
+                Logger.warning(
+                  "Shard #{inspect(state.id)}: Read resolved for key #{inspect(key)}, height #{height_req}, but read_ref #{inspect(read_ref)} did not match stored ref #{inspect(details_at_req.read_lock_ref)} during release."
+                )
+
+                state
+              end
+
+            # Map internal {:ok, :absent} to just :absent for the caller
+            {:reply, value_or_absent, new_state}
+
+          block_reason
+          when block_reason in [:blocked_by_watermark, :blocked_by_write_lock] ->
+            # Queue the read
+            pending_for_key = Map.get(state.pending_reads, key, %{})
+
+            updated_pending_for_key =
+              Map.put(pending_for_key, height_req, from)
+
+            new_pending_reads =
+              Map.put(state.pending_reads, key, updated_pending_for_key)
+
+            {:noreply, %{state | pending_reads: new_pending_reads}}
+        end
+    end
   end
 
   # --- Watermark Update Handling ---
@@ -338,7 +425,8 @@ defmodule Anoma.Node.Transaction.Shard do
   # Handle Write Watermark Advancement Message
   @impl true
   def handle_info({:write_watermark_advanced, key, h_write}, state) do
-    current_key_watermarks = Map.get(state.watermarks, key, %{read: -1, write: -1})
+    current_key_watermarks =
+      Map.get(state.watermarks, key, %{read: -1, write: -1})
 
     # Write watermark should only advance
     new_write_wm = max(h_write, current_key_watermarks.write)
@@ -349,7 +437,8 @@ defmodule Anoma.Node.Transaction.Shard do
       state_after_wm_update = %{state | watermarks: new_watermarks_map}
 
       # Check pending reads based ONLY on the new write watermark
-      state_after_reads = check_pending_reads_for_watermark(key, state_after_wm_update)
+      state_after_reads =
+        check_pending_reads_for_watermark(key, state_after_wm_update)
 
       {:noreply, state_after_reads}
     else
@@ -361,7 +450,8 @@ defmodule Anoma.Node.Transaction.Shard do
   # Handle Read Watermark Advancement
   @impl true
   def handle_info({:read_watermark_advanced, key, h_read}, state) do
-    current_key_watermarks = Map.get(state.watermarks, key, %{read: -1, write: -1})
+    current_key_watermarks =
+      Map.get(state.watermarks, key, %{read: -1, write: -1})
 
     # Read watermark should only advance
     new_read_wm = max(h_read, current_key_watermarks.read)
@@ -384,7 +474,10 @@ defmodule Anoma.Node.Transaction.Shard do
   # Catch-all for other info messages
   @impl true
   def handle_info(msg, state) do
-    Logger.debug("Shard #{inspect(state.id)} received unhandled info: #{inspect(msg)}")
+    Logger.debug(
+      "Shard #{inspect(state.id)} received unhandled info: #{inspect(msg)}"
+    )
+
     {:noreply, state}
   end
 
@@ -397,7 +490,8 @@ defmodule Anoma.Node.Transaction.Shard do
   # I check if reads pending for a specific key might be resolvable after a write has
   # occurred. Currently, I delegate directly to `check_pending_reads_for_watermark`
   # as watermark advancement is the primary trigger for resolving pending reads.
-  @spec check_pending_reads_for_write(key(), height(), __MODULE__.t()) :: __MODULE__.t()
+  @spec check_pending_reads_for_write(key(), height(), __MODULE__.t()) ::
+          __MODULE__.t()
   defp check_pending_reads_for_write(key, _write_height, state) do
     # A write might make a *newer* read resolvable if the watermark allows it.
     # The main check is handled by check_pending_reads_for_watermark.
@@ -410,54 +504,86 @@ defmodule Anoma.Node.Transaction.Shard do
   # If a read becomes resolvable, I calculate the result, reply directly to the waiting
   # caller using `GenServer.reply/2`, release the corresponding read lock, and
   # remove the request from the pending map.
-  @spec check_pending_reads_for_watermark(key(), __MODULE__.t()) :: __MODULE__.t()
+  @spec check_pending_reads_for_watermark(key(), __MODULE__.t()) ::
+          __MODULE__.t()
   defp check_pending_reads_for_watermark(key, state) do
-    pending_for_key = Map.get(state.pending_reads, key, %{}) # Now: %{height => from}
+    # Now: %{height => from}
+    pending_for_key = Map.get(state.pending_reads, key, %{})
     key_watermarks = Map.get(state.watermarks, key, %{read: -1, write: -1})
 
     # Iterate through pending heights {height_req => from}
     {new_pending_for_key, updated_state} =
-      Enum.reduce(pending_for_key, {%{}, state}, fn {height_req, from}, {acc_pending_map, acc_state} ->
+      Enum.reduce(pending_for_key, {%{}, state}, fn {height_req, from},
+                                                    {acc_pending_map,
+                                                     acc_state} ->
         # Re-fetch key_height_map inside reduce as it might change due to lock release
         current_key_height_map = Map.get(acc_state.kv, key, %{})
-        resolution_result = resolve_read_value(height_req, current_key_height_map, key_watermarks)
+
+        resolution_result =
+          resolve_read_value(
+            height_req,
+            current_key_height_map,
+            key_watermarks
+          )
 
         case resolution_result do
-          {:ok, value_or_absent} -> # Includes :absent or {:ok, val}
+          # Includes :absent or {:ok, val}
+          {:ok, value_or_absent} ->
             # Resolve succeeded
 
             # Reply directly to the original caller
             GenServer.reply(from, value_or_absent)
 
             # --- Release Read Lock ---
-            details_at_req_height = Map.get(current_key_height_map, height_req, %{value: nil, read_lock_ref: nil, write_lock_ref: nil})
+            details_at_req_height =
+              Map.get(current_key_height_map, height_req, %{
+                value: nil,
+                read_lock_ref: nil,
+                write_lock_ref: nil
+              })
+
             state_after_lock_release =
-               if !is_nil(details_at_req_height.read_lock_ref) do
-                  updated_details = %{details_at_req_height | read_lock_ref: nil}
-                  new_key_height_map = Map.put(current_key_height_map, height_req, updated_details)
-                  new_kv = Map.put(acc_state.kv, key, new_key_height_map)
-                  %{acc_state | kv: new_kv}
-               else
-                  # Should not happen if logic is correct, but log if it does
-                  Logger.warning("Shard #{inspect(acc_state.id)}: Resolved PENDING read for key #{inspect(key)}, height #{height_req}, but read lock was already nil when releasing.")
-                  acc_state
-               end
+              if !is_nil(details_at_req_height.read_lock_ref) do
+                updated_details = %{
+                  details_at_req_height
+                  | read_lock_ref: nil
+                }
+
+                new_key_height_map =
+                  Map.put(current_key_height_map, height_req, updated_details)
+
+                new_kv = Map.put(acc_state.kv, key, new_key_height_map)
+                %{acc_state | kv: new_kv}
+              else
+                # Should not happen if logic is correct, but log if it does
+                Logger.warning(
+                  "Shard #{inspect(acc_state.id)}: Resolved PENDING read for key #{inspect(key)}, height #{height_req}, but read lock was already nil when releasing."
+                )
+
+                acc_state
+              end
 
             # Don't add this height back to accumulator, effectively removing it from pending
             {acc_pending_map, state_after_lock_release}
 
-          block_reason when block_reason in [:blocked_by_watermark, :blocked_by_write_lock] ->
-               # Still blocked, keep pending
-               {Map.put(acc_pending_map, height_req, from), acc_state}
-        end # end case resolution_result
-      end) # end Enum.reduce
+          block_reason
+          when block_reason in [:blocked_by_watermark, :blocked_by_write_lock] ->
+            # Still blocked, keep pending
+            {Map.put(acc_pending_map, height_req, from), acc_state}
+        end
+
+        # end case resolution_result
+      end)
+
+    # end Enum.reduce
 
     # Update the state's pending reads map for the key
     new_pending_reads =
       if map_size(new_pending_for_key) > 0 do
         Map.put(updated_state.pending_reads, key, new_pending_for_key)
       else
-        Map.delete(updated_state.pending_reads, key) # Clean up if no reads left for this key
+        # Clean up if no reads left for this key
+        Map.delete(updated_state.pending_reads, key)
       end
 
     %{updated_state | pending_reads: new_pending_reads}
@@ -480,7 +606,8 @@ defmodule Anoma.Node.Transaction.Shard do
         maybe_max_h_le_wm =
           key_height_map
           |> Enum.filter(fn {h, _} -> h <= read_watermark end)
-          |> Enum.max_by(fn {h, _} -> h end, fn -> nil end) # Returns {h, details} or nil
+          # Returns {h, details} or nil
+          |> Enum.max_by(fn {h, _} -> h end, fn -> nil end)
 
         # Start with the height of the latest entry <= watermark (if any)
         heights_to_keep =
@@ -491,7 +618,9 @@ defmodule Anoma.Node.Transaction.Shard do
 
         # 2. Find heights needed to support active read locks
         read_lock_heights =
-          for {h, details} <- key_height_map, not is_nil(details.read_lock_ref), do: h
+          for {h, details} <- key_height_map,
+              not is_nil(details.read_lock_ref),
+              do: h
 
         # Convert to set for efficient union later
         read_lock_heights_set = MapSet.new(read_lock_heights)
@@ -505,18 +634,21 @@ defmodule Anoma.Node.Transaction.Shard do
               |> Enum.max_by(fn {h, _} -> h end, fn -> nil end)
 
             case maybe_max_h_lt_rl do
-              {h, _} -> h # Just need the height
+              # Just need the height
+              {h, _} -> h
               nil -> nil
             end
           end
-          |> Enum.reject(&is_nil(&1)) # Filter out cases where no lower height exists
+          # Filter out cases where no lower height exists
+          |> Enum.reject(&is_nil(&1))
           |> MapSet.new()
 
         # 3. Combine all essential heights: latest <= WM, supporting heights, and heights with locks
         all_heights_to_keep =
           heights_to_keep
           |> MapSet.union(supporting_heights)
-          |> MapSet.union(read_lock_heights_set) # Add heights holding the locks
+          # Add heights holding the locks
+          |> MapSet.union(read_lock_heights_set)
 
         # 4. Filter the map: Keep entries > watermark OR in the essential set
         new_key_height_map =
@@ -548,7 +680,9 @@ defmodule Anoma.Node.Transaction.Shard do
   # - `:blocked_by_watermark` if `height_req` is above the write watermark.
   # - `:blocked_by_write_lock` if the latest entry below `height_req` holds a write lock.
   @spec resolve_read_value(height(), map(), map()) ::
-          {:ok, :absent | {:ok, value()}} | :blocked_by_watermark | :blocked_by_write_lock
+          {:ok, :absent | {:ok, value()}}
+          | :blocked_by_watermark
+          | :blocked_by_write_lock
   defp resolve_read_value(height_req, key_height_map, key_watermarks) do
     cond do
       # 1. Check Watermark (Unchanged)
@@ -561,8 +695,9 @@ defmodule Anoma.Node.Transaction.Shard do
         maybe_relevant_entry =
           key_height_map
           |> Enum.filter(fn {h, details} ->
-               h < height_req and (not is_nil(details.value) or not is_nil(details.write_lock_ref))
-             end)
+            h < height_req and
+              (not is_nil(details.value) or not is_nil(details.write_lock_ref))
+          end)
           |> Enum.max_by(fn {h, _details} -> h end, fn -> nil end)
 
         case maybe_relevant_entry do
@@ -580,16 +715,18 @@ defmodule Anoma.Node.Transaction.Shard do
 
               # If the latest relevant entry holds a write lock, block the read.
               not is_nil(details.write_lock_ref) ->
-                 :blocked_by_write_lock
+                :blocked_by_write_lock
 
               # Should be unreachable.
               true ->
-                 Logger.error("Shard: Unreachable state in resolve_read_value for key height map: #{inspect(key_height_map)}, height_req: #{height_req}")
-                 # Treat as absent if we somehow reach here
-                 {:ok, :absent}
+                Logger.error(
+                  "Shard: Unreachable state in resolve_read_value for key height map: #{inspect(key_height_map)}, height_req: #{height_req}"
+                )
+
+                # Treat as absent if we somehow reach here
+                {:ok, :absent}
             end
         end
     end
   end
-
 end

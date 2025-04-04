@@ -7,13 +7,13 @@ defmodule Anoma.Node.Examples.EShardSupervisor do
   alias Anoma.Node.Registry
   alias Anoma.Node.Transaction.Shard
   alias Anoma.Node.Transaction.ShardRouter
+
   # ShardSupervisor isn't called directly, but good to alias if referencing types
   # alias Anoma.Node.Transaction.ShardSupervisor
 
   import ExUnit.Assertions
 
   # Use the same registry name constant defined in supervisors
-
 
   @doc """
   I test starting a node with a shard configuration, verifying that the
@@ -38,7 +38,9 @@ defmodule Anoma.Node.Examples.EShardSupervisor do
     # 2. Verify ShardRouter Exists
     via_router = Registry.via(node_id, ShardRouter)
     pid_router = Registry.whereis(node_id, ShardRouter)
-    assert is_pid(pid_router), "ShardRouter for node #{node_id} should be registered and alive."
+
+    assert is_pid(pid_router),
+           "ShardRouter for node #{node_id} should be registered and alive."
 
     # 3. Verify Shard Processes Exist using (key, Module) lookup
     via_shard_a = Registry.via(node_id, Shard, "a")
@@ -64,10 +66,20 @@ defmodule Anoma.Node.Examples.EShardSupervisor do
     assert state_c.kv["c"][-1].value == 7, "Shard 'c' initial value mismatch"
 
     # 5. Query ShardRouter using the specific router's via tuple
-    assert GenServer.call(via_router, {:get_shard_name, "a"}) == {:ok, via_shard_a}, "Router lookup for 'a' failed"
-    assert GenServer.call(via_router, {:get_shard_name, "b"}) == {:ok, via_shard_b}, "Router lookup for 'b' failed"
-    assert GenServer.call(via_router, {:get_shard_name, "c"}) == {:ok, via_shard_c}, "Router lookup for 'c' failed"
-    assert GenServer.call(via_router, {:get_shard_name, "d"}) == :error, "Router lookup for unknown key 'd' should return :error"
+    assert GenServer.call(via_router, {:get_shard_name, "a"}) ==
+             {:ok, via_shard_a},
+           "Router lookup for 'a' failed"
+
+    assert GenServer.call(via_router, {:get_shard_name, "b"}) ==
+             {:ok, via_shard_b},
+           "Router lookup for 'b' failed"
+
+    assert GenServer.call(via_router, {:get_shard_name, "c"}) ==
+             {:ok, via_shard_c},
+           "Router lookup for 'c' failed"
+
+    assert GenServer.call(via_router, {:get_shard_name, "d"}) == :error,
+           "Router lookup for unknown key 'd' should return :error"
 
     # 6. Cleanup
     :ok = ENode.stop_node(enode)
