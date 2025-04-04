@@ -123,23 +123,23 @@ defmodule Nock.Jets.Mugs do
       {"put", 7, @layer_11_in, &Nock.Jets.mput/1, :enabled, 30},
     (Jets.calculate_core_param(701, 93, 11) |> hd()) =>
       {"got", 7, @layer_11_in, &Nock.Jets.got/1, :enabled, 30},
-    (Jets.calculate_core(5972, Nock.Lib.stdlib_layers()) |> hd()) =>
+    (Jets.calculate_core(11956, Nock.Lib.stdlib_layers()) |> hd()) =>
       {"kind", 7, @layer_rm, &Nock.Jets.kind/1, :enabled, 100},
-    (Jets.calculate_core(372, Nock.Lib.stdlib_layers()) |> hd()) =>
+    (Jets.calculate_core(746, Nock.Lib.stdlib_layers()) |> hd()) =>
       {"delta-add", 7, @layer_rm, &Nock.Jets.delta_add/1, :enabled, 50},
     (Jets.calculate_core(12013, Nock.Lib.stdlib_layers()) |> hd()) =>
       {"delta-sub", 7, @layer_rm, &Nock.Jets.delta_sub/1, :enabled, 50},
-    (Jets.calculate_core(701, Nock.Lib.stdlib_layers()) |> hd()) =>
+    (Jets.calculate_core(1397, Nock.Lib.stdlib_layers()) |> hd()) =>
       {"resource-delta", 7, @layer_rm, &Nock.Jets.resource_delta/1, :enabled,
        50},
-    (Jets.calculate_core(702, Nock.Lib.stdlib_layers()) |> hd()) =>
+    (Jets.calculate_core(1398, Nock.Lib.stdlib_layers()) |> hd()) =>
       {"compliance-unit-delta", 7, @layer_rm, &Nock.Jets.compliance_delta/1,
        :enabled, 10},
     (Jets.calculate_core(4, Nock.Lib.stdlib_layers()) |> hd()) =>
       {"action-delta", 7, @layer_rm, &Nock.Jets.action_delta/1, :enabled, 50},
-    (Jets.calculate_core(11951, Nock.Lib.stdlib_layers()) |> hd()) =>
+    (Jets.calculate_core(23919, Nock.Lib.stdlib_layers()) |> hd()) =>
       {"make-delta", 7, @layer_rm, &Nock.Jets.make_delta/1, :enabled, 50},
-    (Jets.calculate_core(382, Nock.Lib.stdlib_layers()) |> hd()) =>
+    (Jets.calculate_core(766, Nock.Lib.stdlib_layers()) |> hd()) =>
       {"action-create", 7, @layer_rm, &Nock.Jets.action_create/1, :enabled,
        10},
     (Jets.calculate_core(1502, Nock.Lib.stdlib_layers()) |> hd()) =>
@@ -148,12 +148,12 @@ defmodule Nock.Jets.Mugs do
     (Jets.calculate_core(374, Nock.Lib.stdlib_layers()) |> hd()) =>
       {"trm-delta-key", 7, @layer_rm, &Nock.Jets.trm_delta_key/1, :enabled,
        10},
-    (Jets.calculate_core(383, Nock.Lib.stdlib_layers()) |> hd()) =>
+    (Jets.calculate_core(767, Nock.Lib.stdlib_layers()) |> hd()) =>
       {"t-compose", 7, @layer_rm, &Nock.Jets.t_compose/1, :enabled, 10},
     (Jets.calculate_core(92, Nock.Lib.stdlib_layers()) |> hd()) =>
       {"cairo-compose", 7, @layer_rm, &Nock.Jets.cairo_compose/1, :enabled,
        10},
-    (Jets.calculate_core(1406, Nock.Lib.stdlib_layers()) |> hd()) =>
+    (Jets.calculate_core(2798, Nock.Lib.stdlib_layers()) |> hd()) =>
       {"cairo-create_from_cus", 7, @layer_rm,
        &Nock.Jets.cairo_create_from_cus/1, :enabled, 10},
     (Jets.calculate_core(1503, Nock.Lib.stdlib_layers()) |> hd()) =>
